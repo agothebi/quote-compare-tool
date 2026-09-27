@@ -1,0 +1,725 @@
+# Lines of business, their core rows, and known extra coverages.
+# - core:   always shown in the table, in this order. Row names come from the broker's current tool.
+# - extras: known optional coverages. Shown under "Also compare" when any quote marks them important,
+#           otherwise under "Other coverages on these quotes". Anything not listed here is extracted as key "other" with the document's label.
+# - desc:   tells the LLM what belongs under this key, including common carrier wording.
+# - per_vehicle: value can differ per vehicle.
+# - multiple: the key may appear several times in one quote without a vehicle (one item per category).
+# - better: (display only) higher | lower. Which way is better for a dollar amount in this row: marks
+#           the best value and draws bars in the broker's table. Omit it when neither is simply better.
+# - help:   (display only) one plain-English line under the row name on the client PDF.
+# Bump config_version whenever you edit label, desc, per_vehicle, multiple, note, or anything under
+# notice_keys (cached extractions re-run, which costs API calls). Changes to better, help, or show
+# alone need no bump: the model never sees them.
+
+config_version: "7"
+
+notice_keys:
+  # desc: tells the LLM what to record.  show: the sentence the app shows under "Good to know" (null = not shown there).
+  estimated_premium:
+    desc: "The document says the price is an estimate, preliminary, or depends on something not yet run (e.g. credit or financial responsibility score)."
+    show: "Price is an estimate."
+  quote_expiration:
+    desc: "The date the quote expires or how long it is valid."
+    show: "Quote expires: {text}"
+  policy_period:
+    desc: "Proposed effective and expiration dates."
+    show: null
+  uninsured_motorist_rejected:
+    desc: "UM or UIM coverage is shown as rejected or declined."
+    show: "Uninsured motorist coverage is marked rejected."
+  underlying_auto_bi:
+    desc: "Umbrella quotes only: the auto bodily injury limits the umbrella requires (e.g. $300,000/$500,000). Copy the value exactly."
+    show: "Requires auto liability of {text}."
+  underlying_auto_pd:
+    desc: "Umbrella quotes only: the auto property damage limit the umbrella requires."
+    show: "Requires auto property damage of {text}."
+  underlying_home_liability:
+    desc: "Umbrella quotes only: the home personal liability limit the umbrella requires."
+    show: "Requires home liability of {text}."
+  discounts:
+    desc: "The list of discounts applied, as one line of text. Note any multi-policy / bundle discount."
+    show: null
+  surcharge_or_history:
+    desc: "Accidents, violations, or claims listed that affect the price."
+    show: "Accident or violation listed."
+  other_notice:
+    desc: "Anything else a broker should see before recommending: exclusions of note, flood not covered, roof settlement terms, conditions."
+    show: null      # free text: shown in the quote dialog, not under "Good to know"
+  # Added by code, not by the LLM:
+  no_pay_in_full:
+    desc: null
+    show: "No pay-in-full price shown. This is the stated total."
+  below_umbrella_requirement:
+    desc: null
+    show: "Liability is below what the {carrier} umbrella requires."
+  sum_mismatch:
+    desc: null
+    show: "{text}"  # shown only while the price is marked for checking
+  monthly_only:
+    desc: null
+    show: "Only a monthly premium is shown."
+
+lines:
+
+  auto:
+    label: Auto
+    core:
+      bi_limit:
+        label: Bodily injury liability
+        better: higher
+        help: "Injuries you cause to other people"
+        desc: "Bodily Injury (BI) liability limits, usually per person / per accident. Also called 'Liability' when shown with BI limits."
+      pd_limit:
+        label: Property damage liability
+        better: higher
+        help: "Damage you cause to other people's property"
+        desc: "Property Damage (PD) liability limit."
+      umbi_limit:
+        label: Uninsured motorist BI
+        better: higher
+        help: "Your injuries when the other driver has too little insurance"
+        desc: "Uninsured / Underinsured Motorist bodily injury (UM, UIM, UM/UIM, 'Combined Uninsured/Underinsured Motorist'). If rejected, value is the printed word (e.g. 'Rejected')."
+      umpd_limit:
+        label: Uninsured motorist PD
+        better: higher
+        help: "Damage to your vehicle by a driver with too little insurance"
+        desc: "Uninsured Motorist Property Damage (UMPD) limit, and deductible if shown in the same line."
+      med_pay:
+        label: Medical payments
+        better: higher
+        help: "Medical bills for you and your passengers"
+        desc: "Medical Payments (MedPay). Not PIP."
+      collision_deductible:
+        label: Collision deductible
+        better: lower
+        help: "What you pay first when your vehicle hits something"
+        per_vehicle: true
+        desc: "Collision deductible per vehicle. Value is the deductible as printed (e.g. '$1,000', '1,000 | 500'; 'Actual Cash Value' is a limit, not a deductible)."
+      comp_deductible:
+        label: Other-than-collision deductible
+        better: lower
+        help: "What you pay first for theft, hail, fire, or hitting an animal"
+        per_vehicle: true
+        desc: "Comprehensive / Other Than Collision (OTC) deductible per vehicle."
+    extras:
+      rental:
+        label: Rental reimbursement
+        help: "A rental car while yours is being repaired"
+        per_vehicle: true
+        desc: "Rental Reimbursement, Extended/Increased Transportation Expense, Rental. Limits like $50/day, $1,500 max."
+      towing_roadside:
+        label: Towing / roadside
+        help: "Tows and roadside help"
+        per_vehicle: true
+        desc: "Towing and Labor, Roadside Assistance."
+      pip:
+        label: Personal injury protection
+        help: "Medical bills and lost wages, whoever is at fault"
+        desc: "PIP, where offered."
+      loan_lease_gap:
+        label: Loan/lease gap
+        help: "Pays off the loan if the car is worth less than you owe"
+        per_vehicle: true
+        desc: "Loan/Lease Payoff, Gap coverage."
+      new_car_replacement:
+        label: New car replacement
+        help: "A new car, not its used value, if a new car is totaled"
+        per_vehicle: true
+        desc: "New car replacement / better car replacement."
+      accident_forgiveness:
+        label: Accident forgiveness
+        help: "Your first accident doesn't raise the price"
+        desc: "Accident forgiveness."
+      custom_equipment:
+        label: Custom equipment
+        help: "Parts and equipment added to the car"
+        per_vehicle: true
+        desc: "Custom parts and equipment coverage."
+      stated_amount:
+        label: Stated amount
+        help: "The car's value, agreed up front"
+        per_vehicle: true
+        desc: "Stated amount / agreed value on a vehicle."
+
+  home:
+    label: Home
+    core:
+      cov_a_dwelling:
+        label: Coverage A, dwelling
+        better: higher
+        help: "Rebuilding the house itself"
+        desc: "Dwelling limit."
+      cov_b_other_structures:
+        label: Coverage B, other structures
+        better: higher
+        help: "Detached garage, fences, sheds"
+        desc: "Other structures / private structures limit."
+      cov_c_personal_property:
+        label: Coverage C, personal contents
+        better: higher
+        help: "Your belongings"
+        desc: "Personal property / contents limit."
+      cov_d_loss_of_use:
+        label: Coverage D, loss of use
+        better: higher
+        help: "Where you live while repairs happen"
+        desc: "Loss of use / additional living expense limit."
+      cov_e_liability:
+        label: Coverage E, personal liability
+        better: higher
+        help: "If someone is hurt at your home and sues"
+        desc: "Personal liability limit."
+      cov_f_med_pay:
+        label: Coverage F, medical payments
+        better: higher
+        help: "Guests' medical bills, whoever is at fault"
+        desc: "Medical payments to others limit."
+      loss_assessment:
+        label: Loss assessment
+        better: higher
+        help: "Your share of an HOA special assessment"
+        desc: "Loss assessment coverage limit."
+      water_backup:
+        label: Water backup
+        better: higher
+        help: "Backed-up drains and sump pumps"
+        desc: "Water back up and sump discharge or overflow limit."
+      aop_deductible:
+        label: All perils deductible
+        better: lower
+        help: "What you pay first on most claims"
+        desc: "All Other Perils (AOP) / all perils / property coverage deductible."
+      wind_hail_deductible:
+        label: Wind/hail deductible
+        better: lower
+        help: "What you pay first on a wind or hail claim"
+        desc: "Windstorm or hail deductible. Copy exactly, including percent and any dollar amount in parentheses (e.g. '2% ($7,150)')."
+    extras:
+      contents_replacement_cost:
+        label: Contents replacement cost
+        help: "Pays new-for-old for your belongings"
+        desc: "Personal property replacement cost (loss settlement) vs actual cash value. Value is Included / Excluded / Yes / No as printed. Very important when quotes differ."
+      extended_dwelling:
+        label: Extended dwelling coverage
+        help: "Extra room if rebuilding costs more than expected"
+        desc: "Additional / extended / specified additional amount of insurance for Coverage A (a percent such as 25% or 50%, or a dollar amount)."
+      ordinance_or_law:
+        label: Ordinance or law
+        better: higher
+        help: "Upgrades the building code requires after a loss"
+        desc: "Ordinance or law / building ordinance coverage (percent or dollar limit)."
+      equipment_breakdown:
+        label: Equipment breakdown
+        help: "Heating, cooling, water heater, and appliances"
+        desc: "Equipment / home systems breakdown."
+      service_line:
+        label: Service line
+        better: higher
+        help: "Underground pipes and wires to the house"
+        desc: "Service line coverage."
+      personal_injury:
+        label: Personal injury
+        help: "Libel, slander, and false arrest claims"
+        desc: "Personal injury liability endorsement (libel, slander, etc.)."
+      identity_theft:
+        label: Identity theft
+        help: "Costs of recovering from identity theft"
+        desc: "Identity fraud / theft expense."
+      inflation_guard:
+        label: Inflation guard
+        help: "Raises the limits each year with building costs"
+        desc: "Inflation guard percent."
+      hurricane_deductible:
+        label: Hurricane deductible
+        better: lower
+        help: "What you pay first on a hurricane claim"
+        desc: "Named storm / hurricane deductible if separate from wind/hail."
+      special_limits:
+        label: Special limits (jewelry, firearms, etc.)
+        help: "Higher limits for jewelry, firearms, and similar items"
+        multiple: true
+        desc: "Every increased special limit of liability for a category of personal property (jewelry/watches/furs, firearms, silverware/goldware, money, securities, computers, and similar), usually labeled 'Increased Special Limits' or 'Coverage C Special Limits'. Use this key for every such category, one item per category, label as printed."
+      mold_fungi:
+        label: Mold / fungi
+        help: "Mold and rot damage"
+        desc: "Limited fungi, mold, wet or dry rot coverage."
+      business_property:
+        label: Business property
+        help: "Business equipment kept at home"
+        desc: "Business property / business pursuits."
+      credit_card_forgery:
+        label: Credit card / forgery
+        help: "Card fraud, forgery, and fake money"
+        desc: "Credit card, EFT card, forgery and counterfeit money coverage."
+
+  landlord:
+    label: Landlord
+    note: "Dwelling fire policies (DP-1, DP-2, DP-3) for rental properties."
+    core:
+      dwelling:
+        label: Dwelling
+        better: higher
+        help: "Rebuilding the rental house"
+        desc: "Dwelling limit (Coverage A)."
+      other_structures:
+        label: Other structures
+        better: higher
+        help: "Detached garage, fences, sheds"
+        desc: "Other / private structures (Coverage B)."
+      personal_property:
+        label: Personal property
+        better: higher
+        help: "Your furnishings in the rental"
+        desc: "Landlord's personal property (Coverage C)."
+      fair_rental_value:
+        label: Fair rental value / loss of rent
+        better: higher
+        help: "Lost rent while repairs happen"
+        desc: "Fair rental value, loss of rents, additional living costs and fair rental value (Coverage D)."
+      premises_liability:
+        label: Premises liability
+        better: higher
+        help: "If a tenant or guest is hurt and sues"
+        desc: "Premises / personal liability limit (Coverage L or E)."
+      med_pay:
+        label: Medical payments
+        better: higher
+        help: "Guests' medical bills, whoever is at fault"
+        desc: "Medical payments (Coverage M or F)."
+      aop_deductible:
+        label: All perils deductible
+        better: lower
+        help: "What you pay first on most claims"
+        desc: "General / all other perils deductible."
+      wind_hail_deductible:
+        label: Wind/hail deductible
+        better: lower
+        help: "What you pay first on a wind or hail claim"
+        desc: "Wind and hail deductible, copied exactly."
+    extras:
+      loss_settlement_dwelling:
+        label: Dwelling loss settlement
+        help: "Whether repairs are paid new or depreciated"
+        desc: "Replacement cost or actual cash value for the dwelling."
+      loss_settlement_roof:
+        label: Roof loss settlement
+        help: "Whether a roof is paid new or depreciated"
+        desc: "Roof settlement terms as printed (for example roof surfacing paid at actual cash value, or a schedule by roof age)."
+      water_backup:
+        label: Water backup
+        better: higher
+        help: "Backed-up drains and sump pumps"
+        desc: "Water back up and sump overflow limit (and its deductible as a separate item with label)."
+      ordinance_or_law:
+        label: Ordinance or law
+        better: higher
+        help: "Upgrades the building code requires after a loss"
+        desc: "Ordinance or law limit."
+      vandalism:
+        label: Vandalism / malicious mischief
+        help: "Damage others do on purpose"
+        desc: "Vandalism or malicious mischief."
+      theft:
+        label: Theft
+        help: "Stolen property"
+        desc: "Theft / limited theft coverage."
+      animal_liability:
+        label: Animal liability
+        help: "Injuries caused by animals on the property"
+        desc: "Animal / dog liability sublimit."
+      water_damage_limitation:
+        label: Water damage limitation
+        help: "Limits on water damage claims"
+        desc: "Water damage limitation or sublimit."
+
+  umbrella:
+    label: Umbrella
+    core:
+      umbrella_limit:
+        label: Coverage limit
+        better: higher
+        help: "Extra liability above your home and auto"
+        desc: "Umbrella / personal liability limit (e.g. $1,000,000)."
+      retained_limit:
+        label: Retained limit (SIR)
+        better: lower
+        help: "What you pay first when only the umbrella applies"
+        desc: "Retained limit / self-insured retention."
+      covered_autos:
+        label: Autos covered
+        help: "Vehicles the umbrella sits above"
+        desc: "Number of autos / motorhomes included or added."
+      covered_properties:
+        label: Properties covered
+        help: "Homes the umbrella sits above"
+        desc: "Residences / rental properties included."
+      excess_um:
+        label: Excess UM/UIM
+        help: "Extra coverage when an uninsured driver injures you"
+        desc: "Excess uninsured / underinsured motorists coverage, value as printed (e.g. 'No Coverage')."
+    extras:
+      watercraft:
+        label: Watercraft
+        help: "Boats the umbrella sits above"
+        desc: "Watercraft included."
+      rental_properties:
+        label: Rental properties
+        help: "Rental homes the umbrella sits above"
+        desc: "Additional rental properties."
+
+  motorcycle:
+    label: Motorcycle
+    core:
+      bi_limit:
+        label: Bodily injury liability
+        better: higher
+        help: "Injuries you cause to other people"
+        desc: "Bodily Injury liability limits."
+      pd_limit:
+        label: Property damage liability
+        better: higher
+        help: "Damage you cause to other people's property"
+        desc: "Property Damage liability limit."
+      umbi_limit:
+        label: Uninsured motorist BI
+        better: higher
+        help: "Your injuries when the other driver has too little insurance"
+        desc: "UM/UIM bodily injury."
+      umpd_limit:
+        label: Uninsured motorist PD
+        better: higher
+        help: "Damage to your vehicle by a driver with too little insurance"
+        desc: "UM property damage."
+      med_pay:
+        label: Medical payments
+        better: higher
+        help: "Medical bills for you and your passengers"
+        desc: "Medical payments."
+      accessory:
+        label: Accessory coverage
+        better: higher
+        help: "Added parts and accessories"
+        desc: "Accessories / custom parts and equipment."
+      collision_deductible:
+        label: Collision deductible
+        better: lower
+        help: "What you pay first when your vehicle hits something"
+        desc: "Collision deductible."
+      comp_deductible:
+        label: Other-than-collision deductible
+        better: lower
+        help: "What you pay first for theft, hail, fire, or hitting an animal"
+        desc: "Comprehensive / other than collision deductible."
+    extras:
+      towing_roadside:
+        label: Towing / roadside
+        help: "Tows and roadside help"
+        desc: "Roadside assistance / towing."
+      riding_gear:
+        label: Riding gear
+        help: "Helmet, jacket, and other gear"
+        desc: "Safety apparel / riding gear coverage."
+      trip_interruption:
+        label: Trip interruption
+        help: "Travel costs if the bike breaks down on a trip"
+        desc: "Trip interruption."
+
+  renters:
+    label: Renters
+    note: "Renters / tenants policies (HO-4 form): the tenant's belongings and liability, no dwelling coverage."
+    core:
+      personal_property:
+        label: Personal property
+        better: higher
+        help: "Your belongings"
+        desc: "Personal property / contents limit (Coverage C)."
+      liability:
+        label: Liability
+        better: higher
+        help: "If someone is hurt at your place and sues"
+        desc: "Personal liability limit (Coverage E)."
+      med_pay:
+        label: Medical payments
+        better: higher
+        help: "Guests' medical bills, whoever is at fault"
+        desc: "Medical payments to others (Coverage F)."
+      loss_of_use:
+        label: Loss of use
+        better: higher
+        help: "Where you live while repairs happen"
+        desc: "Loss of use / additional living expense (Coverage D)."
+      deductible:
+        label: Deductible
+        better: lower
+        help: "What you pay first on a claim"
+        desc: "The all perils / property deductible."
+    extras:
+      contents_replacement_cost:
+        label: Contents replacement cost
+        help: "Pays new-for-old for your belongings"
+        desc: "Personal property replacement cost (loss settlement) vs actual cash value. Value as printed (Included / Excluded / Yes / No)."
+      water_backup:
+        label: Water backup
+        better: higher
+        help: "Backed-up drains and sump pumps"
+        desc: "Water back up and sump discharge or overflow."
+      identity_theft:
+        label: Identity theft
+        help: "Costs of recovering from identity theft"
+        desc: "Identity fraud / theft expense."
+      building_additions:
+        label: Building additions and alterations
+        better: higher
+        help: "Improvements you made to the rental"
+        desc: "Tenant's improvements, building additions and alterations."
+      scheduled_property:
+        label: Scheduled personal property
+        help: "Listed valuables, covered item by item"
+        multiple: true
+        desc: "Scheduled items (jewelry, bicycles, cameras, and similar), one item per category or scheduled article, label as printed."
+      special_limits:
+        label: Special limits (jewelry, firearms, etc.)
+        help: "Higher limits for jewelry, firearms, and similar items"
+        multiple: true
+        desc: "Increased special limits for a category of personal property (jewelry, firearms, silverware, money, computers). One item per category, label as printed."
+      earthquake:
+        label: Earthquake
+        help: "Earthquake damage"
+        desc: "Earthquake coverage and its deductible if on the same line."
+      pet_damage:
+        label: Pet damage
+        help: "Damage your pet causes"
+        desc: "Pet damage / animal damage to the rented unit."
+      personal_injury:
+        label: Personal injury
+        help: "Libel, slander, and false arrest claims"
+        desc: "Personal injury liability endorsement (libel, slander, etc.)."
+
+  flood:
+    label: Flood
+    note: "Flood policies: NFIP (National Flood Insurance Program, 'Standard Flood Insurance Policy') or private flood."
+    core:
+      building:
+        label: Building coverage
+        better: higher
+        help: "Flood damage to the house"
+        desc: "Building property limit (NFIP 'Building Coverage', private flood 'Dwelling' or Coverage A)."
+      contents:
+        label: Contents coverage
+        better: higher
+        help: "Flood damage to your belongings"
+        desc: "Personal property / contents limit (NFIP 'Contents Coverage', private flood Coverage C). 'Not covered' or 'None' is a value."
+      deductible:
+        label: Deductible
+        better: lower
+        help: "What you pay first on a flood claim"
+        desc: "The building deductible, or the one deductible when the quote prints a single deductible for everything."
+    extras:
+      contents_deductible:
+        label: Contents deductible
+        better: lower
+        help: "What you pay first on belongings"
+        desc: "A separate deductible for contents, when printed apart from the building deductible."
+      icc:
+        label: Increased cost of compliance
+        better: higher
+        help: "Code-required upgrades after a flood"
+        desc: "Increased Cost of Compliance (ICC) limit, e.g. $30,000."
+      loss_of_use:
+        label: Loss of use
+        help: "Where you live while repairs happen"
+        desc: "Additional living expense / loss of use (private flood only)."
+      other_structures:
+        label: Other structures
+        help: "Detached garage, fences, sheds"
+        desc: "Other structures / detached structures (private flood only)."
+      replacement_cost:
+        label: Building loss settlement
+        help: "Whether repairs are paid new or depreciated"
+        desc: "Replacement cost vs actual cash value for the building, as printed."
+      basement:
+        label: Basement coverage
+        help: "What is covered in a basement"
+        desc: "Basement / below-grade contents or finishes coverage, as printed."
+      pool:
+        label: Pool / outdoor property
+        help: "Pools and outdoor property"
+        desc: "Swimming pool, decks, or outdoor property (private flood)."
+
+  watercraft:
+    label: Boat / watercraft
+    note: "Boat, yacht, and personal watercraft (jet ski) policies."
+    core:
+      hull:
+        label: Hull coverage
+        better: higher
+        help: "The boat itself"
+        desc: "Physical damage limit for the boat (hull, motor, and equipment), agreed value or actual cash value, as printed."
+      hull_deductible:
+        label: Deductible
+        better: lower
+        help: "What you pay first on damage to the boat"
+        desc: "Hull / physical damage deductible (a dollar amount or a percent of the hull value)."
+      liability:
+        label: Liability
+        better: higher
+        help: "Damage or injuries you cause with the boat"
+        desc: "Watercraft liability (bodily injury and property damage), often one combined limit."
+      med_pay:
+        label: Medical payments
+        better: higher
+        help: "Medical bills for people on board"
+        desc: "Medical payments."
+      uninsured_boater:
+        label: Uninsured boater
+        better: higher
+        help: "Your injuries caused by an uninsured boater"
+        desc: "Uninsured / underinsured boater (watercraft) bodily injury."
+    extras:
+      personal_effects:
+        label: Personal effects
+        help: "Belongings on the boat"
+        desc: "Personal effects / personal property on board."
+      fishing_equipment:
+        label: Fishing equipment
+        help: "Fishing gear"
+        desc: "Fishing equipment."
+      trailer:
+        label: Trailer
+        help: "The boat trailer"
+        desc: "Boat trailer physical damage limit."
+      towing_assistance:
+        label: Towing and assistance
+        help: "Tows and help on the water"
+        desc: "On-water towing, emergency service, or assistance."
+      fuel_spill:
+        label: Fuel spill liability
+        help: "Cleanup if fuel spills"
+        desc: "Fuel spill / pollution liability."
+      wreck_removal:
+        label: Wreck removal
+        help: "Removing a sunken boat"
+        desc: "Wreck removal."
+
+  rv:
+    label: RV
+    note: "Motorhome, travel trailer, fifth wheel, and camper policies."
+    core:
+      bi_limit:
+        label: Bodily injury liability
+        better: higher
+        help: "Injuries you cause to other people"
+        desc: "Bodily Injury (BI) liability limits, usually per person / per accident."
+      pd_limit:
+        label: Property damage liability
+        better: higher
+        help: "Damage you cause to other people's property"
+        desc: "Property Damage (PD) liability limit."
+      umbi_limit:
+        label: Uninsured motorist BI
+        better: higher
+        help: "Your injuries when the other driver has too little insurance"
+        desc: "Uninsured / Underinsured Motorist bodily injury (UM, UIM, UM/UIM). If rejected, the printed word."
+      umpd_limit:
+        label: Uninsured motorist PD
+        better: higher
+        help: "Damage to your vehicle by a driver with too little insurance"
+        desc: "Uninsured Motorist Property Damage (UMPD) limit."
+      med_pay:
+        label: Medical payments
+        better: higher
+        help: "Medical bills for you and your passengers"
+        desc: "Medical Payments (MedPay). Not PIP."
+      collision_deductible:
+        label: Collision deductible
+        better: lower
+        help: "What you pay first when your vehicle hits something"
+        per_vehicle: true
+        desc: "Collision deductible per RV."
+      comp_deductible:
+        label: Other-than-collision deductible
+        better: lower
+        help: "What you pay first for theft, hail, fire, or hitting an animal"
+        per_vehicle: true
+        desc: "Comprehensive / Other Than Collision (OTC) deductible per RV."
+    extras:
+      personal_effects:
+        label: Personal effects
+        help: "Belongings in the RV"
+        desc: "Personal effects / contents carried in the RV."
+      full_timer:
+        label: Full-timer coverage
+        help: "Coverage when the RV is your home"
+        desc: "Full-timer coverage for people who live in their RV."
+      vacation_liability:
+        label: Vacation liability
+        help: "Injuries at your campsite"
+        desc: "Vacation / campsite liability while the RV is parked as a residence."
+      emergency_expense:
+        label: Emergency expense
+        help: "Lodging and travel if the RV breaks down far from home"
+        desc: "Emergency expense / vacation expense (lodging and transport after a covered loss)."
+      roadside:
+        label: Towing / roadside
+        help: "Tows and roadside help"
+        desc: "Roadside assistance / towing."
+      total_loss_replacement:
+        label: Total loss replacement
+        help: "A new RV if yours is totaled"
+        per_vehicle: true
+        desc: "Total loss replacement / purchase price guarantee / new RV replacement."
+      attached_accessories:
+        label: Attached accessories
+        help: "Awnings, antennas, and other add-ons"
+        per_vehicle: true
+        desc: "Attached accessories, awnings, satellite dishes."
+      pip:
+        label: Personal injury protection
+        help: "Medical bills and lost wages, whoever is at fault"
+        desc: "PIP, where offered."
+
+  life:
+    label: Life
+    note: "Term, whole, and universal life. No 6/12-month policy term: the coverage term is in years (term_length), and the price is often monthly."
+    core:
+      coverage_type:
+        label: Coverage type
+        help: "Term, whole, or universal life"
+        desc: "Term life, whole life, universal life, guaranteed universal life, as printed."
+      death_benefit:
+        label: Death benefit
+        better: higher
+        help: "What your family receives"
+        desc: "Death benefit / face amount / coverage amount."
+      term_length:
+        label: Term length
+        help: "How long the price stays level"
+        desc: "Level term period as printed (e.g. '10 Years', '15-Year Term', 'To Age 100'). Whole life: the printed wording, if any."
+      rate_class:
+        label: Rate class
+        help: "The health class the price assumes"
+        desc: "Underwriting / health / risk class the price assumes (e.g. 'Preferred Non-Smoker', 'Standard Plus')."
+      riders:
+        label: Riders
+        help: "Extra features added to the policy"
+        multiple: true
+        desc: "Every rider, one item each (accelerated death benefit, waiver of premium, child term, accidental death benefit, return of premium), label as printed, value as printed (Included / an amount)."
+    extras:
+      premium_guarantee:
+        label: Premium guarantee
+        help: "How long the price is guaranteed"
+        desc: "How long the premium is guaranteed level (e.g. 'Level premium guaranteed 10 years')."
+      conversion:
+        label: Conversion option
+        help: "Switching to permanent coverage later"
+        desc: "Conversion privilege to permanent coverage (e.g. 'Convertible until age 65')."
+      cash_value:
+        label: Cash value
+        help: "Savings value that builds over time"
+        desc: "Guaranteed cash value or surrender value (permanent policies)."
+      insurer_rating:
+        label: Insurer rating
+        help: "The insurer's financial strength"
+        desc: "The insurer's financial strength rating (e.g. 'AM Best A')."
+

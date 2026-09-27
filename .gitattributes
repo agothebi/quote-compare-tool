@@ -1,0 +1,4 @@
+# the start scripts keep the line endings their system needs, whoever clones the repo
+*.bat text eol=crlf
+*.sh text eol=lf
+*.command text eol=lf

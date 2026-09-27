@@ -1,0 +1,581 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "record_quotes",
+  "description": "All quotes found in one document. One entry per line of business.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "quotes"
+  ],
+  "properties": {
+    "quotes": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "line",
+          "carrier",
+          "pages",
+          "term_months",
+          "term_source",
+          "price",
+          "items",
+          "notices",
+          "price_facts"
+        ],
+        "properties": {
+          "line": {
+            "type": "string",
+            "enum": [
+              "auto",
+              "home",
+              "landlord",
+              "umbrella",
+              "motorcycle",
+              "renters",
+              "flood",
+              "watercraft",
+              "rv",
+              "life",
+              "unknown"
+            ]
+          },
+          "carrier": {
+            "type": "string",
+            "description": "Insurance company or brand as printed (e.g. 'Travelers', 'SafeCo', 'Heritage Property & Casualty Insurance Company')."
+          },
+          "pages": {
+            "type": "array",
+            "items": {
+              "type": "integer"
+            },
+            "description": "Page numbers this quote occupies."
+          },
+          "term_months": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "description": "Policy term in months as stated (6 or 12). Null if not stated, and always null for life (its coverage term, e.g. 20 years, is the term_length item)."
+          },
+          "term_source": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Exact text that states the term or policy period."
+          },
+          "price": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "value",
+              "basis",
+              "source"
+            ],
+            "properties": {
+              "value": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "description": "The price exactly as printed, e.g. '$4,428.71'."
+              },
+              "basis": {
+                "type": "string",
+                "enum": [
+                  "pay_in_full",
+                  "stated_total",
+                  "monthly",
+                  "not_found"
+                ],
+                "description": "pay_in_full: the whole-term (or, for life, the annual) amount paid at once; stated_total: the stated total when no pay-in-full price is printed; monthly: only a monthly premium is printed (life); not_found."
+              },
+              "source": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "description": "Exact text containing the value."
+              }
+            }
+          },
+          "vehicles": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Auto, motorcycle, RV, and watercraft: every vehicle, boat, motor, and trailer as printed, in the order the document lists them. Per-vehicle items name their vehicle exactly like this."
+          },
+          "items": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "key",
+                "label",
+                "value",
+                "premium",
+                "vehicle",
+                "importance",
+                "source",
+                "section"
+              ],
+              "properties": {
+                "key": {
+                  "type": "string",
+                  "description": "A core or extras key from the lines config, or 'other'."
+                },
+                "label": {
+                  "type": "string",
+                  "description": "The coverage name exactly as printed."
+                },
+                "value": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "description": "The limit, deductible, percent, or status word exactly as printed, for this key's role (a limit for a coverage key, a deductible for a *_deductible key)."
+                },
+                "premium": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "description": "Premium for this item exactly as printed, or the status word printed in the premium column (e.g. 'Included'). Null if none."
+                },
+                "vehicle": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "description": "For per-vehicle coverages: the vehicle this item is for, written exactly as in `vehicles`. Null for policy-level coverages."
+                },
+                "importance": {
+                  "type": "string",
+                  "enum": [
+                    "key",
+                    "minor"
+                  ]
+                },
+                "source": {
+                  "type": "string",
+                  "description": "The exact line(s) of text this item was read from."
+                },
+                "section": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "description": "The heading of the table or section this item is printed under, as printed (e.g. 'Deductibles', 'Coverages', 'Optional coverages', 'Policy coverages'). Null if none."
+                }
+              }
+            }
+          },
+          "notices": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "estimated_premium",
+              "quote_expiration",
+              "policy_period",
+              "uninsured_motorist_rejected",
+              "underlying_auto_bi",
+              "underlying_auto_pd",
+              "underlying_home_liability",
+              "discounts",
+              "surcharge_or_history",
+              "other_notice"
+            ],
+            "description": "A checklist: answer every question. null means the document does not say it.",
+            "properties": {
+              "estimated_premium": {
+                "type": [
+                  "object",
+                  "null"
+                ],
+                "additionalProperties": false,
+                "required": [
+                  "text",
+                  "source"
+                ],
+                "properties": {
+                  "text": {
+                    "type": "string",
+                    "description": "Short text copied from the document."
+                  },
+                  "source": {
+                    "type": "string",
+                    "description": "Exact text the notice was read from."
+                  }
+                },
+                "description": "The document says the price is an estimate, preliminary, or depends on something not yet run (e.g. credit or financial responsibility score). null if the document does not say this."
+              },
+              "quote_expiration": {
+                "type": [
+                  "object",
+                  "null"
+                ],
+                "additionalProperties": false,
+                "required": [
+                  "text",
+                  "source"
+                ],
+                "properties": {
+                  "text": {
+                    "type": "string",
+                    "description": "Short text copied from the document."
+                  },
+                  "source": {
+                    "type": "string",
+                    "description": "Exact text the notice was read from."
+                  }
+                },
+                "description": "The date the quote expires or how long it is valid. null if the document does not say this."
+              },
+              "policy_period": {
+                "type": [
+                  "object",
+                  "null"
+                ],
+                "additionalProperties": false,
+                "required": [
+                  "text",
+                  "source"
+                ],
+                "properties": {
+                  "text": {
+                    "type": "string",
+                    "description": "Short text copied from the document."
+                  },
+                  "source": {
+                    "type": "string",
+                    "description": "Exact text the notice was read from."
+                  }
+                },
+                "description": "Proposed effective and expiration dates. null if the document does not say this."
+              },
+              "uninsured_motorist_rejected": {
+                "type": [
+                  "object",
+                  "null"
+                ],
+                "additionalProperties": false,
+                "required": [
+                  "text",
+                  "source"
+                ],
+                "properties": {
+                  "text": {
+                    "type": "string",
+                    "description": "Short text copied from the document."
+                  },
+                  "source": {
+                    "type": "string",
+                    "description": "Exact text the notice was read from."
+                  }
+                },
+                "description": "UM or UIM coverage is shown as rejected or declined. null if the document does not say this."
+              },
+              "underlying_auto_bi": {
+                "type": [
+                  "object",
+                  "null"
+                ],
+                "additionalProperties": false,
+                "required": [
+                  "text",
+                  "source"
+                ],
+                "properties": {
+                  "text": {
+                    "type": "string",
+                    "description": "Short text copied from the document."
+                  },
+                  "source": {
+                    "type": "string",
+                    "description": "Exact text the notice was read from."
+                  }
+                },
+                "description": "Umbrella quotes only: the auto bodily injury limits the umbrella requires (e.g. $250,000/$500,000). Copy the value exactly. null if the document does not say this."
+              },
+              "underlying_auto_pd": {
+                "type": [
+                  "object",
+                  "null"
+                ],
+                "additionalProperties": false,
+                "required": [
+                  "text",
+                  "source"
+                ],
+                "properties": {
+                  "text": {
+                    "type": "string",
+                    "description": "Short text copied from the document."
+                  },
+                  "source": {
+                    "type": "string",
+                    "description": "Exact text the notice was read from."
+                  }
+                },
+                "description": "Umbrella quotes only: the auto property damage limit the umbrella requires. null if the document does not say this."
+              },
+              "underlying_home_liability": {
+                "type": [
+                  "object",
+                  "null"
+                ],
+                "additionalProperties": false,
+                "required": [
+                  "text",
+                  "source"
+                ],
+                "properties": {
+                  "text": {
+                    "type": "string",
+                    "description": "Short text copied from the document."
+                  },
+                  "source": {
+                    "type": "string",
+                    "description": "Exact text the notice was read from."
+                  }
+                },
+                "description": "Umbrella quotes only: the home personal liability limit the umbrella requires. null if the document does not say this."
+              },
+              "discounts": {
+                "type": [
+                  "object",
+                  "null"
+                ],
+                "additionalProperties": false,
+                "required": [
+                  "text",
+                  "source"
+                ],
+                "properties": {
+                  "text": {
+                    "type": "string",
+                    "description": "Short text copied from the document."
+                  },
+                  "source": {
+                    "type": "string",
+                    "description": "Exact text the notice was read from."
+                  }
+                },
+                "description": "The list of discounts applied, as one line of text. Note any multi-policy / bundle discount. null if the document does not say this."
+              },
+              "surcharge_or_history": {
+                "type": [
+                  "object",
+                  "null"
+                ],
+                "additionalProperties": false,
+                "required": [
+                  "text",
+                  "source"
+                ],
+                "properties": {
+                  "text": {
+                    "type": "string",
+                    "description": "Short text copied from the document."
+                  },
+                  "source": {
+                    "type": "string",
+                    "description": "Exact text the notice was read from."
+                  }
+                },
+                "description": "Accidents, violations, or claims listed that affect the price. null if the document does not say this."
+              },
+              "other_notice": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "text",
+                    "source"
+                  ],
+                  "properties": {
+                    "text": {
+                      "type": "string",
+                      "description": "Short text copied from the document."
+                    },
+                    "source": {
+                      "type": "string",
+                      "description": "Exact text the notice was read from."
+                    }
+                  }
+                },
+                "description": "Anything else a broker should see before recommending: exclusions of note, flood not covered, roof settlement terms, conditions."
+              }
+            }
+          },
+          "premium_parts": {
+            "type": [
+              "object",
+              "null"
+            ],
+            "additionalProperties": false,
+            "required": [
+              "parts",
+              "stated_total",
+              "source"
+            ],
+            "properties": {
+              "parts": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                },
+                "description": "Amounts exactly as printed that the document itself adds up to a total, including negatives and fees."
+              },
+              "stated_total": {
+                "type": "string",
+                "description": "The total they add up to, exactly as printed."
+              },
+              "source": {
+                "type": "string",
+                "description": "Exact text of the total line."
+              }
+            }
+          },
+          "price_facts": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "premium",
+              "charges",
+              "premium_and_charges_total",
+              "pay_in_full_total"
+            ],
+            "description": "The quote's price anatomy, copied as printed. Code adds these up; you never do.",
+            "properties": {
+              "premium": {
+                "type": [
+                  "object",
+                  "null"
+                ],
+                "additionalProperties": false,
+                "required": [
+                  "label",
+                  "value",
+                  "source"
+                ],
+                "properties": {
+                  "label": {
+                    "type": "string",
+                    "description": "The wording as printed."
+                  },
+                  "value": {
+                    "type": "string",
+                    "description": "The amount exactly as printed."
+                  },
+                  "source": {
+                    "type": "string",
+                    "description": "Exact text it was read from."
+                  }
+                },
+                "description": "The premium for the term before fees and taxes, when printed as one amount (e.g. 'Our premium for this coverage is $X', 'Subtotal policy premium'). null if not printed as one amount."
+              },
+              "charges": {
+                "type": "array",
+                "description": "Every fee, tax, surcharge, and discount printed for this quote, each once.",
+                "items": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "label",
+                    "value",
+                    "source",
+                    "kind"
+                  ],
+                  "properties": {
+                    "label": {
+                      "type": "string",
+                      "description": "The wording as printed."
+                    },
+                    "value": {
+                      "type": "string",
+                      "description": "The amount exactly as printed."
+                    },
+                    "source": {
+                      "type": "string",
+                      "description": "Exact text it was read from."
+                    },
+                    "kind": {
+                      "type": "string",
+                      "enum": [
+                        "fee",
+                        "tax",
+                        "discount",
+                        "installment_fee",
+                        "card_surcharge"
+                      ]
+                    }
+                  }
+                }
+              },
+              "premium_and_charges_total": {
+                "type": [
+                  "object",
+                  "null"
+                ],
+                "additionalProperties": false,
+                "required": [
+                  "label",
+                  "value",
+                  "source"
+                ],
+                "properties": {
+                  "label": {
+                    "type": "string",
+                    "description": "The wording as printed."
+                  },
+                  "value": {
+                    "type": "string",
+                    "description": "The amount exactly as printed."
+                  },
+                  "source": {
+                    "type": "string",
+                    "description": "Exact text it was read from."
+                  }
+                },
+                "description": "The printed total of premium plus fees and taxes for the term (before any pay-in-full discount), e.g. 'Total estimated policy premium and fees', 'Total 6 month policy premium and fees'. null if not printed."
+              },
+              "pay_in_full_total": {
+                "type": [
+                  "object",
+                  "null"
+                ],
+                "additionalProperties": false,
+                "required": [
+                  "label",
+                  "value",
+                  "source"
+                ],
+                "properties": {
+                  "label": {
+                    "type": "string",
+                    "description": "The wording as printed."
+                  },
+                  "value": {
+                    "type": "string",
+                    "description": "The amount exactly as printed."
+                  },
+                  "source": {
+                    "type": "string",
+                    "description": "Exact text it was read from."
+                  }
+                },
+                "description": "The printed amount due when the whole term is paid at once, if shown. null if not printed."
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}
