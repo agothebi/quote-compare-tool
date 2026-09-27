@@ -1,4 +1,4 @@
-"""Starts the app for the broker: checks, server, browser. Used by run.sh and run.bat.
+"""Starts the app for the broker: checks, server, browser. Used by start.command and start.bat.
 
     python -m app.launch [--no-browser]
 
@@ -82,12 +82,50 @@ def check_tesseract() -> str | None:
             f"  Quotes that are scans or photos can't be read until it is installed.\n  {how}")
 
 
+def save_key(env: str, key: str, path=None) -> None:
+    """Write `env=key` into .env: the line is replaced when there is one, otherwise added. The file
+    starts from .env.example, so it keeps the notes on which key goes where."""
+    import re
+    path = path or ROOT / ".env"
+    if path.exists():
+        text = path.read_text(encoding="utf-8-sig")
+    else:
+        example = ROOT / ".env.example"
+        text = example.read_text(encoding="utf-8") if example.exists() else ""
+    line = f"{env}={key}"
+    pattern = re.compile(rf"^{re.escape(env)}=.*$", re.M)
+    text = pattern.sub(lambda m: line, text, count=1) if pattern.search(text) else text.rstrip("\n") + f"\n{line}\n"
+    path.write_text(text, encoding="utf-8")
+
+
+def ask_for_key(env: str) -> bool:
+    """First start without a key: ask for it in this window and save it. Only in a real window."""
+    import os
+    if not sys.stdin or not sys.stdin.isatty():
+        return False
+    print(LINE)
+    print("  Paste the API key you were given, then press Return.")
+    print("  (Press Return without a key to skip; quotes can't be read until it is added.)")
+    print(LINE)
+    try:
+        key = input("  API key: ").strip().strip('"').strip("'")
+    except (EOFError, KeyboardInterrupt):
+        print()
+        return False
+    if not key:
+        return False
+    save_key(env, key)
+    os.environ[env] = key
+    print("  Saved. You won't be asked again.\n")
+    return True
+
+
 def check_key() -> str | None:
     load_env()
     import os
     s = settings()["llm"]
     env = s[s["provider"]]["api_key_env"]
-    if os.environ.get(env):
+    if os.environ.get(env) or ask_for_key(env):
         return None
     return (f"No API key found ({env}). The app opens, but quotes can't be read yet.\n"
             f"  Put the key in {ROOT / '.env'} as  {env}=...  (see .env.example), then restart.")

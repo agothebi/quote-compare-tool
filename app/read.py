@@ -113,7 +113,8 @@ def tesseract_cmd() -> str | None:
     if found:
         return found
     local = os.path.expandvars(r"%LOCALAPPDATA%\Programs\Tesseract-OCR\tesseract.exe")
-    return next((p for p in [*TESSERACT_WINDOWS, local] if os.path.exists(p)), None)
+    homebrew = ["/opt/homebrew/bin/tesseract", "/usr/local/bin/tesseract"]  # a Mac app started outside Terminal
+    return next((p for p in [*TESSERACT_WINDOWS, local, *homebrew] if os.path.exists(p)), None)
 
 
 def tesseract(gray: np.ndarray, psm: int | None = None, layout: bool | None = None) -> str:

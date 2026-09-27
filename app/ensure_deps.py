@@ -1,4 +1,4 @@
-"""First-run setup, used by run.sh and run.bat. Standard library only (runs before anything is installed).
+"""First-run setup, used by start.command and start.bat. Standard library only (runs before anything is installed).
 
 Installs requirements.txt into the virtual environment it runs in, and again only when that file
 changes (a hash stamp in the venv), so every later start is instant.
