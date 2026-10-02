@@ -205,6 +205,7 @@ class ComparisonPatch(BaseModel):
     current_quote: str | None = Field(default=None, max_length=40)
     stage: Literal["working", "ready", "sent", "closed"] | None = None
     outcome: Literal["bound", "lost"] | None = None
+    archived: StrictBool | None = None
     export: ExportOptions | None = None
 
 
@@ -239,8 +240,8 @@ def view(cid: str, recheck: bool = True) -> dict:
 
 def maybe_recheck(comp: dict) -> dict:
     """lines.yaml or the prompt changed since these files were read: extract them again."""
-    if comp.get("stage") in ("sent", "closed"):
-        return comp  # a proposal already sent keeps the numbers the client saw
+    if comp.get("stage") in ("sent", "closed") or comp.get("archived_at"):
+        return comp  # a proposal already sent keeps the numbers the client saw; an archived client is left alone
     versions = current_versions()
     stale = [f["id"] for f in comp["files"] if f["status"] == "done" and f.get("versions")
              and f["versions"] != versions and storage.work_path(comp["id"], f["id"], "pages").exists()]
@@ -258,25 +259,35 @@ def maybe_recheck(comp: dict) -> dict:
 
 
 @app.get("/api/comparisons")
-def list_comparisons():
+def list_comparisons(archived: bool = False):
+    """The board's cards (archived clients left out), or with ?archived=1 only the archived ones,
+    most recently archived first. Either way, how many are archived (the board links to them)."""
+    comps = storage.list_raw()
+    shelf = [c for c in comps if c.get("archived_at")]
+    if archived:
+        comps = sorted(shelf, key=lambda c: c["archived_at"], reverse=True)
+    else:
+        comps = [c for c in comps if not c.get("archived_at")]
     cards = []
-    for comp in storage.list_raw():
+    for comp in comps:
         try:
             cards.append(present.card(comp))
         except Exception:  # one damaged comparison must not hide the whole board
             log.exception("could not summarize %s", comp.get("id"))
             cards.append({"id": comp["id"], "client_name": comp["client"]["name"], "stage": comp["stage"],
-                          "outcome": comp["outcome"], "created_at": comp["created_at"],
+                          "outcome": comp["outcome"], "archived_at": comp.get("archived_at"), "created_at": comp["created_at"],
                           "updated_at": comp["updated_at"], "quotes": len(comp["quotes"]), "files": len(comp["files"]),
                           "lines": [], "carriers": [], "review": 0, "picked": 0, "total": None,
                           "total_estimated": False, "expires": None, "processing": 0, "failed": 0, "progress": None})
-    return {"comparisons": cards}
+    return {"comparisons": cards, "archived": len(shelf)}
 
 
 @app.post("/api/board/move")
 def board_move(body: BoardMove):
     """Drag and drop on the board: the card's column (its status) and its place in the column."""
     comp = storage.load(body.id)
+    if comp["archived_at"]:
+        raise HTTPException(409, "This client is archived. Unarchive it first.")
     if comp["stage"] != body.stage:
         def change(c):
             c["stage"] = body.stage
@@ -305,9 +316,11 @@ def get_comparison(cid: str, request: Request):
 @app.patch("/api/comparisons/{cid}")
 def patch_comparison(cid: str, body: ComparisonPatch):
     moved: list[str] = []
+    shelved: list[bool] = []  # [True] archived by this change, [False] unarchived
 
     def change(comp):
         moved.clear()
+        shelved.clear()
         if body.client_name is not None:
             if not body.client_name.strip():
                 raise HTTPException(422, "Enter the client's name.")
@@ -356,6 +369,10 @@ def patch_comparison(cid: str, body: ComparisonPatch):
             if body.outcome is not None and comp["stage"] != "closed":
                 raise HTTPException(409, "Only a closed comparison is bound or not bound.")
             comp["outcome"] = body.outcome
+        if body.archived is not None and body.archived != bool(comp["archived_at"]):
+            # archiving only takes the client off the board: its files, readings and stage are kept
+            comp["archived_at"] = storage.now() if body.archived else None
+            shelved.append(body.archived)
         if body.export is not None:
             comp["export"].update(body.export.model_dump(exclude_none=True))
         if body.keep_line is not None and body.keep_key is not None and body.keep is not None:
@@ -364,9 +381,11 @@ def patch_comparison(cid: str, body: ComparisonPatch):
                 kept.append(body.keep_key)
             elif not body.keep and body.keep_key in kept:
                 kept.remove(body.keep_key)
-    storage.update(cid, change)
-    if moved:
-        storage.place(cid, moved[0], 0)
+    comp = storage.update(cid, change)
+    if comp["archived_at"]:
+        storage.forget(cid)  # a status change while archived only sets the column it comes back to
+    elif moved or shelved:
+        storage.place(cid, comp["stage"], 0)  # moved or unarchived: at the top of its column
     return view(cid)
 
 

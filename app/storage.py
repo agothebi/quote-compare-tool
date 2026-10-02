@@ -147,6 +147,7 @@ def normalize(comp: dict) -> dict:
     comparison.json loads as if it had always had them (it is saved that way on its next change).
 
     stage / outcome   the board column, and bound / lost once closed
+    archived_at       when the broker archived it (off the board, files kept), or None
     current           {line: quote id} the client's current policy, compared against
     export            what the client PDF includes (EXPORT_DEFAULTS)
     fact_choices      {line: {fact id: on}} the broker's ticks on the drafted reasons
@@ -168,6 +169,8 @@ def normalize(comp: dict) -> dict:
         comp["stage"] = "working"
     if comp.get("outcome") not in OUTCOMES or comp["stage"] != "closed":
         comp["outcome"] = None
+    if not (isinstance(comp.get("archived_at"), str) and comp["archived_at"]):
+        comp["archived_at"] = None
     export = comp.get("export") if isinstance(comp.get("export"), dict) else {}
     comp["export"] = {k: export.get(k, v) if type(export.get(k, v)) is type(v) else v for k, v in EXPORT_DEFAULTS.items()}
     if comp["export"]["length"] not in ("full", "short"):
@@ -209,8 +212,8 @@ def update(cid: str, change: Callable[[dict], object]) -> dict:
 
 
 def list_raw() -> list[dict]:
-    """Every readable comparison, in board order: by column, then the broker's order in the
-    column. Comparisons the order file does not know (older ones) follow, newest change first."""
+    """Every readable comparison (archived ones too), in board order: by column, then the broker's
+    order in the column. Comparisons the order file does not know (older ones) follow, newest change first."""
     comps = []
     if not root().exists():
         return comps

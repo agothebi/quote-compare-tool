@@ -1,7 +1,7 @@
 /* Quote Compare: the broker's screen.
  *
- * Three pages: the board (#/), a client's comparison (#/c/<id>[/<line>]) and its proposal
- * (#/c/<id>/proposal). One state object (S). Every change goes: user action -> API call -> the
+ * Four pages: the board (#/), the archived clients (#/archived), a client's comparison
+ * (#/c/<id>[/<line>]) and its proposal (#/c/<id>/proposal). One state object (S). Every change goes: user action -> API call -> the
  * server returns the updated comparison -> the page redraws from state. The server is the source of
  * truth, so a reload always shows the same page. All text from quotes goes through esc().
  *
@@ -33,6 +33,9 @@ const S = {
   build: null,
   board: null,          // cards from GET /api/comparisons
   filter: '',
+  archivedCount: 0,     // the board links to the archived clients
+  shelf: null,          // archived cards from GET /api/comparisons?archived=1
+  shelfFilter: '',
   comp: null,           // the open comparison (the server's view)
   lineBy: {},           // comparison id -> selected line
   rowMode: 'all',       // 'all' | 'diff'
@@ -163,6 +166,7 @@ function restoreFocus(key) {
 
 function parseHash() {
   const h = location.hash.replace(/^#/, '') || '/';
+  if (h === '/archived') return { name: 'archived' };
   const m = h.match(/^\/c\/([a-z0-9][a-z0-9_-]{0,80})(?:\/([a-z_]+))?$/);
   if (!m) return { name: 'board' };
   if (m[2] === 'proposal') return { name: 'proposal', id: m[1] };
@@ -183,6 +187,7 @@ async function route() {
   S.route = r;
   document.body.classList.toggle('on-proposal', r.name === 'proposal');
   if (r.name === 'board') await showBoard(seq);
+  else if (r.name === 'archived') await showShelf(seq);
   else await showComparison(r, seq);
 }
 
@@ -197,7 +202,7 @@ async function showBoard(seq) {
   document.title = 'Clients · ANT Insurance';
   S.comp = null;
   if (!S.board) $('#app').innerHTML = '<div class="boot">Loading…</div>';
-  try { S.board = (await api('GET', '/api/comparisons')).comparisons; }
+  try { setBoard(await api('GET', '/api/comparisons')); }
   catch (e) {
     if (seq !== routeSeq) return;
     $('#app').innerHTML = `<div class="empty"><h2>The clients could not be loaded</h2><p>${esc(e.message)}</p><button class="btn" data-act="reload">Try again</button></div>`;
@@ -215,12 +220,15 @@ function scheduleBoardRefresh() {
   if (S.route.name === 'board' && S.board && S.board.some(c => c.processing)) S.boardTimer = setTimeout(refreshBoard, 1500);
 }
 
+function setBoard(r) { S.board = r.comparisons; S.archivedCount = r.archived || 0; }
+
 async function refreshBoard() {
+  if (S.route.name === 'archived') { refreshShelf(); return; }
   if (S.route.name !== 'board') return;
   try {
-    const list = (await api('GET', '/api/comparisons')).comparisons;
+    const r = await api('GET', '/api/comparisons');
     if (S.route.name !== 'board') return;
-    S.board = list;
+    setBoard(r);
     if (!S.dragging && !$('#menu')) renderBoard();
   } catch (e) { /* the next refresh tries again */ }
   scheduleBoardRefresh();
@@ -276,7 +284,7 @@ function renderBoard() {
   }).join('');
   $('#app').innerHTML = topLine(false) + `<header class="phead"><div>
       <h1>Clients</h1><div class="meta">${plural(open, 'open comparison')}${S.board.length ? ' · drag a card when its status changes' : ''}</div></div>
-    <div class="acts"><input class="inp search" id="search" type="search" placeholder="Find a client or carrier" aria-label="Find a client or carrier" value="${esc(S.filter)}">
+    <div class="acts">${S.archivedCount ? `<a class="linkbtn" href="#/archived">Archived (${S.archivedCount})</a>` : ''}<input class="inp search" id="search" type="search" placeholder="Find a client or carrier" aria-label="Find a client or carrier" value="${esc(S.filter)}">
       <button class="btn primary" data-act="new">New client</button></div></header>
     <div class="board">${cols}</div>`;
   applyWidths($('#app'));
@@ -306,11 +314,82 @@ async function moveCard(id, stage, index, undoable = true) {
   rest.splice(pos, 0, card);
   S.board = rest;
   renderBoard();
-  try { S.board = (await api('POST', '/api/board/move', { id, stage, index: at })).comparisons; renderBoard(); }
+  try { setBoard(await api('POST', '/api/board/move', { id, stage, index: at })); renderBoard(); }
   catch (e) { fail(e); refreshBoard(); return; }
   if (was !== stage && undoable) {
     toast(`${card.client_name} moved to ${stageLabel(stage)}`, { action: { label: 'Undo', fn: () => moveCard(id, was, wasIndex, false) } });
   }
+}
+
+// ---------------------------------------------------------------- archived clients (off the board, every file kept)
+
+async function archiveCard(id) {
+  const card = S.board && S.board.find(c => c.id === id);
+  if (!card) return;
+  const wasIndex = S.board.filter(c => c.stage === card.stage).findIndex(c => c.id === id);
+  S.board = S.board.filter(c => c.id !== id);  // optimistic, like a move
+  S.archivedCount += 1;
+  renderBoard();
+  try { await api('PATCH', compPath(id), { archived: true }); }
+  catch (e) { fail(e); refreshBoard(); return; }
+  refreshBoard();
+  toast(`${card.client_name} archived`, { action: { label: 'Undo', fn: () => unarchive(id, wasIndex).then(refreshBoard) } });
+}
+
+// Back on the board at the top of its column, or at `index` (an undo puts it back where it was).
+async function unarchive(id, index = 0) {
+  const v = await api('PATCH', compPath(id), { archived: false });
+  if (index > 0) await api('POST', '/api/board/move', { id, stage: v.stage, index });
+  return v;
+}
+
+async function showShelf(seq) {
+  document.title = 'Archived clients · ANT Insurance';
+  S.comp = null;
+  if (!S.shelf) $('#app').innerHTML = '<div class="boot">Loading…</div>';
+  try { S.shelf = (await api('GET', '/api/comparisons?archived=1')).comparisons; }
+  catch (e) {
+    if (seq !== routeSeq) return;
+    $('#app').innerHTML = `<div class="empty"><h2>The archived clients could not be loaded</h2><p>${esc(e.message)}</p><button class="btn" data-act="reload">Try again</button></div>`;
+    return;
+  }
+  if (seq !== routeSeq) return;
+  renderShelf();
+  window.scrollTo(0, 0);
+  schedulePoll();
+}
+
+async function refreshShelf() {
+  try {
+    const list = (await api('GET', '/api/comparisons?archived=1')).comparisons;
+    if (S.route.name !== 'archived') return;
+    S.shelf = list;
+    renderShelf();
+  } catch (e) { /* the list stays as it was */ }
+}
+
+function shelfRow(c) {
+  const outcome = c.stage === 'closed' && c.outcome ? ` · ${c.outcome === 'bound' ? 'Bound' : 'Not bound'}` : '';
+  return `<li class="shelf-row" data-id="${esc(c.id)}">
+    <div class="who"><a class="nm" href="#/c/${esc(c.id)}">${esc(c.client_name)}</a>
+      <div class="meta"><span class="sw st-${esc(c.stage)}"></span>${esc(stageLabel(c.stage))}${outcome} · ${plural(c.quotes, 'quote')} · archived ${esc(fmtDate(c.archived_at))}</div></div>
+    <div class="acts"><button class="btn sm" data-act="unarchive" data-id="${esc(c.id)}">Unarchive</button><button class="btn sm quiet danger" data-act="delete" data-id="${esc(c.id)}">Delete…</button></div></li>`;
+}
+
+function renderShelf() {
+  if (S.route.name !== 'archived' || !S.shelf) return;
+  const fk = focusKey();
+  const sel = fk === '#shelf-search' ? [$('#shelf-search').selectionStart, $('#shelf-search').selectionEnd] : null;
+  const q = S.shelfFilter.trim().toLowerCase();
+  const rows = S.shelf.filter(c => !q || c.client_name.toLowerCase().includes(q) || (c.carriers || []).some(x => x.toLowerCase().includes(q)));
+  const body = !S.shelf.length
+    ? '<div class="empty"><h2>No archived clients</h2><p>Archive a client from the ⋯ menu on its card. It leaves the board and keeps all its files.</p><a class="btn" href="#/">All clients</a></div>'
+    : rows.length ? `<ul class="shelf">${rows.map(shelfRow).join('')}</ul>` : '<div class="empty-col">No matches</div>';
+  $('#app').innerHTML = topLine(true) + `<header class="phead"><div>
+      <h1>Archived clients</h1><div class="meta">${plural(S.shelf.length, 'client')} · off the board, with all their files kept</div></div>
+    <div class="acts">${S.shelf.length ? `<input class="inp search" id="shelf-search" type="search" placeholder="Find a client or carrier" aria-label="Find an archived client or carrier" value="${esc(S.shelfFilter)}">` : ''}</div></header>${body}`;
+  if (sel) { const box = $('#shelf-search'); box.focus(); box.setSelectionRange(sel[0], sel[1]); }
+  else restoreFocus(fk);
 }
 
 document.addEventListener('dragstart', e => {
@@ -392,7 +471,7 @@ function cardMenu(anchor, id) {
   if (!c) return;
   openMenu(anchor, `<button role="menuitem" data-act="open" data-id="${esc(id)}">Open</button><hr><div class="lbl">Move to</div>
     ${STAGES.map(s => `<button role="menuitem" data-act="move" data-id="${esc(id)}" data-stage="${s.key}" ${s.key === c.stage ? 'aria-current="true"' : ''}>${s.label}${s.key === c.stage ? '<span>current</span>' : ''}</button>`).join('')}
-    <hr><button role="menuitem" class="danger" data-act="delete" data-id="${esc(id)}">Delete…</button>`);
+    <hr><button role="menuitem" data-act="archive" data-id="${esc(id)}">Archive</button><button role="menuitem" class="danger" data-act="delete" data-id="${esc(id)}">Delete…</button>`);
 }
 
 // ---------------------------------------------------------------- modal (one component for every dialog)
@@ -756,8 +835,9 @@ function reviews() {
 
 // The line above every page: the logo on the left (it also goes to the board), "All clients" on the right.
 function topLine(back) {
+  const [href, label] = back === 'archived' ? ['#/archived', 'Archived clients'] : ['#/', 'All clients'];
   return `<div class="topline"><a class="brand" href="#/" aria-label="ANT Insurance, all clients"><img src="/static/logo.png" alt=""><span><b>ANT Insurance</b><span>Quote comparison</span></span></a>
-    ${back ? '<a class="back" href="#/"><span class="ar" aria-hidden="true">‹</span>All clients</a>' : ''}</div>`;
+    ${back ? `<a class="back" href="${href}"><span class="ar" aria-hidden="true">‹</span>${label}</a>` : ''}</div>`;
 }
 
 function clientHead(c, page) {
@@ -767,7 +847,7 @@ function clientHead(c, page) {
     ? '<button class="btn primary" data-act="add">Add quotes</button>'
     : `<button class="btn" data-act="copy-mail">Copy email text</button><a class="btn primary" data-act="download" href="${esc(compPath(c.id, '/export.pdf'))}" download>Download PDF</a>`;
   return `<header class="phead"><div>
-      <div class="titlerow"><h1>${esc(c.client.name)}</h1><select id="stage" aria-label="Status">${stageOpts}</select></div><div class="meta">${c.client.address ? esc(c.client.address) + ' · ' : ''}${plural(nq, 'quote')} · started ${esc(fmtDate(c.created_at))}</div></div>
+      <div class="titlerow"><h1>${esc(c.client.name)}</h1><select id="stage" aria-label="Status">${stageOpts}</select>${c.archived_at ? '<span class="pill">Archived</span><button class="linkbtn sm" data-act="unarchive-open">Unarchive</button>' : ''}</div><div class="meta">${c.client.address ? esc(c.client.address) + ' · ' : ''}${plural(nq, 'quote')} · started ${esc(fmtDate(c.created_at))}</div></div>
     <div class="acts"><nav class="seg" aria-label="Views"><a href="#/c/${esc(c.id)}"${page === 'comp' ? ' aria-current="page"' : ''}>Comparison</a><a href="#/c/${esc(c.id)}/proposal"${page === 'proposal' ? ' aria-current="page"' : ''}>Proposal</a></nav>${acts}</div></header>`;
 }
 
@@ -926,7 +1006,7 @@ function renderComp() {
       <div class="ctrl"><div class="seg" role="group" aria-label="Rows"><button data-act="rows" data-v="all" aria-pressed="${S.rowMode === 'all'}">All rows</button><button data-act="rows" data-v="diff" aria-pressed="${S.rowMode === 'diff'}">Only differences</button></div>${curSel}</div></div>
       ${tableHtml(t)}<p class="ws-foot">Click any value to see it on the quote page or change it.</p>`;
   }
-  $('#app').innerHTML = topLine(true) + clientHead(c, 'comp') + `<div class="ws">${selectorHtml(c, line)}<div class="main">${main}</div></div>`;
+  $('#app').innerHTML = topLine(c.archived_at ? 'archived' : true) + clientHead(c, 'comp') + `<div class="ws">${selectorHtml(c, line)}<div class="main">${main}</div></div>`;
   applyWidths($('#app'));
   const table = $('table.cmp');
   if (table) table.style.minWidth = (180 + (+table.dataset.cols) * 170) + 'px';
@@ -1221,7 +1301,7 @@ function renderProposal() {
   const c = S.comp;
   document.title = `Proposal · ${c.client.name}`;
   const recs = c.tabs.map(t => `<div class="box rec" id="rec-${esc(t.line)}">${recCard(t)}</div>`).join('');
-  $('#app').innerHTML = topLine(true) + clientHead(c, 'proposal') + `<div class="prop"><section class="pset" aria-label="Proposal settings">
+  $('#app').innerHTML = topLine(c.archived_at ? 'archived' : true) + clientHead(c, 'proposal') + `<div class="prop"><section class="pset" aria-label="Proposal settings">
       <div><h3>Before it goes out</h3><div class="box pre" id="pre">${checklist()}</div></div>
       <div><h3>Recommendations</h3><div class="recs">${recs || '<p class="muted">Add quotes first.</p>'}</div></div>
       <div><h3>What to include</h3><div class="opts" id="opts">${optionsHtml()}</div></div>
@@ -1454,9 +1534,22 @@ async function onAction(el, e) {
     case 'card-menu': cardMenu(el, el.dataset.id); break;
     case 'open': closeMenu(); location.hash = `#/c/${el.dataset.id}`; break;
     case 'move': closeMenu(); await moveCard(el.dataset.id, el.dataset.stage, 0); break;
+    case 'archive': closeMenu(); await archiveCard(el.dataset.id); break;
+    case 'unarchive': {
+      el.disabled = true;
+      try { const v = await unarchive(el.dataset.id); toast(`${v.client.name} is back on the board in ${stageLabel(v.stage)}`); refreshShelf(); }
+      catch (err) { el.disabled = false; fail(err); }
+      break;
+    }
+    case 'unarchive-open': {
+      const v = await patchComp({ archived: false });
+      setComp(v);
+      toast(`Back on the board in ${stageLabel(v.stage)}`);
+      break;
+    }
     case 'delete': {
       closeMenu();
-      const card = S.board.find(x => x.id === el.dataset.id);
+      const card = [...(S.board || []), ...(S.shelf || [])].find(x => x.id === el.dataset.id);
       if (card) openModal({ kind: 'delete', id: card.id, name: card.client_name });
       break;
     }
@@ -1708,13 +1801,14 @@ document.addEventListener('submit', e => {
 document.addEventListener('input', e => {
   if (e.target.id === 'notes') onNotesInput();
   if (e.target.id === 'search') { S.filter = e.target.value; renderBoard(); }
+  if (e.target.id === 'shelf-search') { S.shelfFilter = e.target.value; renderShelf(); }
 });
 
 document.addEventListener('change', e => {
   const el = e.target, c = S.comp;
   if (el.id === 'fi') { addFiles(el.files); return; }
   if (el.id === 'stage' && c) {
-    patchComp({ stage: el.value }).then(v => { setComp(v); toast(`Moved to ${stageLabel(el.value)}`); }).catch(err => { fail(err); el.value = c.stage; });
+    patchComp({ stage: el.value }).then(v => { setComp(v); toast(v.archived_at ? `Status set to ${stageLabel(el.value)}. Still archived.` : `Moved to ${stageLabel(el.value)}`); }).catch(err => { fail(err); el.value = c.stage; });
     return;
   }
   if (el.id === 'cur' && c) {

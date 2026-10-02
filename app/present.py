@@ -276,7 +276,7 @@ def view(comp: dict) -> dict:
     return {
         "id": comp["id"], "revision": comp["revision"], "client": comp["client"],
         "created_at": comp["created_at"], "updated_at": comp["updated_at"],
-        "stage": comp["stage"], "outcome": comp["outcome"], "export": comp["export"],
+        "stage": comp["stage"], "outcome": comp["outcome"], "archived_at": comp.get("archived_at"), "export": comp["export"],
         "notes": comp.get("notes", ""), "tabs": tabs, "review": total_review,
         "quotes": {q["id"]: quote_info(q, files, line_labels) for q in quotes},
         "files": [file_view(f) for f in comp["files"]],
@@ -532,7 +532,7 @@ def printed_date(text: str | None) -> str | None:
 def card(comp: dict) -> dict:
     """What a board card shows. Cached per comparison revision (the board polls while files are read)."""
     key = (comp["id"], comp["revision"], comp["updated_at"], comp["stage"], comp.get("outcome"),
-           str(lines_config().get("config_version")))
+           comp.get("archived_at"), str(lines_config().get("config_version")))
     hit = _card_cache.get(key)
     if hit:
         return hit
@@ -544,7 +544,7 @@ def card(comp: dict) -> dict:
     out = {
         "id": comp["id"], "client_name": comp["client"]["name"], "created_at": comp["created_at"],
         "updated_at": comp["updated_at"], "stage": comp["stage"], "outcome": comp["outcome"],
-        "quotes": len(v["quotes"]), "files": len(comp["files"]),
+        "archived_at": comp.get("archived_at"), "quotes": len(v["quotes"]), "files": len(comp["files"]),
         "lines": [{"key": t["line"], "label": t["label"], "count": len(t["columns"])} for t in v["tabs"]],
         "carriers": sorted({c["carrier"] for t in v["tabs"] for c in t["columns"] if c["carrier"]}),
         "review": v["review"], "picked": len(picked),
