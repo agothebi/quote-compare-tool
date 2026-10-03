@@ -1,5 +1,6 @@
-# never commit: the API key, the client data, the Python environment
+# never commit: the API key, the client data, the Python environment, the agency's email text
 .env
+email.txt
 data/
 .venv/
 __pycache__/

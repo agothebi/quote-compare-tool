@@ -123,8 +123,12 @@ def ask_for_key(env: str) -> bool:
 def check_key() -> str | None:
     load_env()
     import os
-    s = settings()["llm"]
-    env = s[s["provider"]]["api_key_env"]
+    from app import llm
+    try:
+        s = llm.llm_settings()
+    except llm.LLMError as e:  # a model name in .env or settings.yaml that isn't known
+        return f"{e}\n  Quotes can't be read until this is fixed (see the README), then restart."
+    env = s["api_key_env"]
     if os.environ.get(env) or ask_for_key(env):
         return None
     return (f"No API key found ({env}). The app opens, but quotes can't be read yet.\n"
@@ -143,6 +147,8 @@ def main(argv: list[str] | None = None) -> int:
     except (ConfigError, KeyError, TypeError) as e:
         print(f"The app's settings could not be read: {e}\nUndo the last change to the config folder, then start again.")
         return 1
+    from app.config import ensure_email_file
+    ensure_email_file()  # email.txt: the proposal's email text, the broker's to edit (also when already running)
     host, port = cfg["host"], int(cfg["port"])
     if host not in ("127.0.0.1", "localhost"):
         print(f"app.host in config/settings.yaml must be 127.0.0.1, not {host}.")

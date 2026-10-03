@@ -1,7 +1,10 @@
 # Runtime settings. API keys are NOT stored here: put them in .env (next to this project's
 # README) or the environment, under the variable named by api_key_env below.
 llm:
-  provider: "gemini"             # "gemini" (build and testing) or "anthropic" (production)
+  # The AI model that reads the quotes: any model listed under a pricing table below. The app
+  # uses that table's provider (Google or Anthropic) and its API key from .env. To use another
+  # model on one computer, put QUOTE_COMPARE_MODEL=<model> in .env instead (see the README).
+  model: "gemini-3.8-flash"
   temperature: 0                 # sent only to models that accept it (Claude Sonnet 5 rejects it)
   max_output_tokens: 16000
   # Spend guardrails. Every call's cost is logged in data/llm_usage.json; before each call the
@@ -10,7 +13,6 @@ llm:
   spend_limit_usd_per_day: 3.50    # a runaway loop stops here
   request_timeout_seconds: 180     # a call that takes longer fails (Retry) instead of blocking the queue
   gemini:
-    model: "gemini-3.8-flash"
     api_key_env: "GEMINI_API_KEY"
     thinking_level: "low"          # Gemini 3.x: minimal | low | medium | high (low keeps tokens down)
     thinking_budget: null        # Gemini 2.5 only: max thinking tokens
@@ -25,7 +27,6 @@ llm:
       gemini-3.5-flash: {input: 1.50, output: 9.00}
       gemini-3.5-flash-lite: {input: 0.30, output: 2.50}
   anthropic:
-    model: "claude-sonnet-5"     # a current Sonnet-class Claude model
     api_key_env: "ANTHROPIC_API_KEY"
     daily_request_limit: 200
     min_seconds_between_requests: 0
@@ -66,4 +67,5 @@ agency:                          # printed on the client PDF
   tagline: "Business & Personal"
   address: "210 Delburg Street, Davidson NC 28036"
   phone: "704-530-6096"
+  website: "insure-ant.com"
   disclaimer: "This comparison is provided for informational purposes only. Coverage terms are subject to policy language."

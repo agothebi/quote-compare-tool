@@ -63,7 +63,7 @@ def read_pages(path: Path, pages_dir: Path) -> list[dict]:
 
 def client_for(comp: dict, f: dict) -> redact.Client:
     c = comp["client"]
-    return redact.Client(c["name"], c.get("address", ""), c.get("other_names") or [])
+    return redact.Client(c["name"], c.get("address", ""), c.get("other_names") or [], c.get("property_address", ""))
 
 
 def run_extract(pages: list[dict], hint: str | None) -> dict:

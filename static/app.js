@@ -251,7 +251,7 @@ function cardSignal(c) {
   if (c.review) return `<span class="pill check"><span class="dot"></span>${plural(c.review, 'value')} to check</span>`;
   const bits = [];
   if (!c.quotes) bits.push('<span class="faint">No quotes yet</span>');
-  else if (c.picked) bits.push(`<span class="muted">${c.picked} of ${c.lines.length} picked${c.total ? ` · ${c.total_estimated ? '≈ ' : ''}${esc(c.total)}/yr` : ''}</span>`);
+  else if (c.picked) bits.push(`<span class="muted">${c.picked} of ${c.lines.length} picked${c.total ? ` · ${c.total_estimated ? '~' : ''}${esc(c.total)}/yr` : ''}</span>`);
   else bits.push('<span class="muted">No picks yet</span>');
   const exp = expiryText(c.expires);
   if (exp && c.stage !== 'sent') bits.push(`<span class="${exp.startsWith('Expired') ? 'bad-t' : 'faint'}">${esc(exp)}</span>`);
@@ -531,6 +531,7 @@ function modalHtml(m) {
     case 'new': return `<form id="new-form" novalidate><div class="mh"><div>${stepsInd(1)}<h2 id="mt">New client</h2><div class="s">Only the name is needed. Names here are hidden before a quote is read.</div></div>${X_BUTTON}</div>
       <div class="mb"><div class="fld"><label for="nc-name">Client name</label><input class="inp" id="nc-name" autocomplete="off" maxlength="200" required></div>
       <div class="fld"><label for="nc-addr">Address (optional)</label><input class="inp" id="nc-addr" autocomplete="off" maxlength="300"></div>
+      <div class="fld"><label for="nc-prop">Property address (optional, for the client PDF)</label><input class="inp" id="nc-prop" autocomplete="off" maxlength="300"><span class="help">The home or rental being insured, if it isn't the address above. It prints on the client PDF.</span></div>
       <div class="fld"><label for="nc-others">Other people in the household (optional)</label><textarea class="inp" id="nc-others" rows="2" maxlength="2000" placeholder="One name per line"></textarea><span class="help">Used to hide personal details before a quote is read.</span></div>
       <p class="err" id="nc-err" hidden></p></div>
       <div class="mf"><button type="button" class="btn quiet" data-act="close">Cancel</button><button class="btn primary" type="submit">Continue</button></div></form>`;
@@ -544,9 +545,10 @@ function modalHtml(m) {
       <div class="mf"><button class="btn" data-act="close">Cancel</button><button class="btn danger-solid" data-act="delete-yes" data-id="${esc(m.id)}">Delete</button></div>`;
     case 'unchecked': return `<div class="mh"><div><h2 id="mt">${plural(m.n, 'value')} still ${m.n === 1 ? 'needs' : 'need'} a check</h2><div class="s">The PDF prints ${m.n === 1 ? 'it' : 'them'} like every other value, so the client can't tell ${m.n === 1 ? 'it was' : 'they were'} not checked.</div></div>${X_BUTTON}</div>
       <div class="mf"><button class="btn" data-act="download-anyway">Download anyway</button><button class="btn primary" data-act="check-first" data-autofocus>Check ${m.n === 1 ? 'it' : 'the first one'}</button></div>`;
-    case 'client': return `<form id="client-form" novalidate><div class="mh"><div><h2 id="mt">Client on the proposal</h2><div class="s">Printed at the top of the PDF.</div></div>${X_BUTTON}</div>
+    case 'client': return `<form id="client-form" novalidate><div class="mh"><div><h2 id="mt">Client details</h2><div class="s">Printed at the top of the client PDF.</div></div>${X_BUTTON}</div>
       <div class="mb"><div class="fld"><label for="cl-name">Client name</label><input class="inp" id="cl-name" maxlength="200" value="${esc(S.comp.client.name)}"></div>
       <div class="fld"><label for="cl-addr">Address (optional)</label><input class="inp" id="cl-addr" maxlength="300" value="${esc(S.comp.client.address || '')}"></div>
+      <div class="fld"><label for="cl-prop">Property address (optional)</label><input class="inp" id="cl-prop" maxlength="300" value="${esc(S.comp.client.property_address || '')}"><span class="help">The home or rental being insured, if it isn't the client's address.</span></div>
       <p class="err" id="cl-err" hidden></p></div>
       <div class="mf"><button type="button" class="btn quiet" data-act="close">Cancel</button><button class="btn primary" type="submit">Save</button></div></form>`;
     case 'notice': return `<div class="mh"><div><h2 id="mt">Good to know</h2><div class="s">${esc(m.sub)}</div></div>${X_BUTTON}</div>
@@ -569,7 +571,7 @@ async function submitNew() {
   const btn = $('#new-form [type=submit]');
   btn.disabled = true;
   try {
-    const v = await api('POST', '/api/comparisons', { client_name: name, address: $('#nc-addr').value.trim(), other_names: others });
+    const v = await api('POST', '/api/comparisons', { client_name: name, address: $('#nc-addr').value.trim(), property_address: $('#nc-prop').value.trim(), other_names: others });
     S.modal = { kind: 'drop', cid: v.id, name: v.client.name, fresh: true, opener: S.modal.opener };
     drawModal(true);
     if (S.route.name === 'board') refreshBoard();
@@ -836,7 +838,7 @@ function reviews() {
 // The line above every page: the logo on the left (it also goes to the board), "All clients" on the right.
 function topLine(back) {
   const [href, label] = back === 'archived' ? ['#/archived', 'Archived clients'] : ['#/', 'All clients'];
-  return `<div class="topline"><a class="brand" href="#/" aria-label="ANT Insurance, all clients"><img src="/static/logo.png" alt=""><span><b>ANT Insurance</b><span>Quote comparison</span></span></a>
+  return `<div class="topline"><a class="brand" href="#/" aria-label="ANT Insurance, all clients"><img src="/static/logo.png" alt="" width="117" height="64"><span>Quote comparison</span></a>
     ${back ? `<a class="back" href="${href}"><span class="ar" aria-hidden="true">‹</span>${label}</a>` : ''}</div>`;
 }
 
@@ -847,17 +849,17 @@ function clientHead(c, page) {
     ? '<button class="btn primary" data-act="add">Add quotes</button>'
     : `<button class="btn" data-act="copy-mail">Copy email text</button><a class="btn primary" data-act="download" href="${esc(compPath(c.id, '/export.pdf'))}" download>Download PDF</a>`;
   return `<header class="phead"><div>
-      <div class="titlerow"><h1>${esc(c.client.name)}</h1><select id="stage" aria-label="Status">${stageOpts}</select>${c.archived_at ? '<span class="pill">Archived</span><button class="linkbtn sm" data-act="unarchive-open">Unarchive</button>' : ''}</div><div class="meta">${c.client.address ? esc(c.client.address) + ' · ' : ''}${plural(nq, 'quote')} · started ${esc(fmtDate(c.created_at))}</div></div>
+      <div class="titlerow"><h1>${esc(c.client.name)}</h1><button class="linkbtn sm" data-act="edit-client" aria-label="Edit the client's name and addresses">Edit</button><select id="stage" aria-label="Status">${stageOpts}</select>${c.archived_at ? '<span class="pill">Archived</span><button class="linkbtn sm" data-act="unarchive-open">Unarchive</button>' : ''}</div><div class="meta">${c.client.address ? esc(c.client.address) + ' · ' : ''}${c.client.property_address ? 'Property: ' + esc(c.client.property_address) + ' · ' : ''}${plural(nq, 'quote')} · started ${esc(fmtDate(c.created_at))}</div></div>
     <div class="acts"><nav class="seg" aria-label="Views"><a href="#/c/${esc(c.id)}"${page === 'comp' ? ' aria-current="page"' : ''}>Comparison</a><a href="#/c/${esc(c.id)}/proposal"${page === 'proposal' ? ' aria-current="page"' : ''}>Proposal</a></nav>${acts}</div></header>`;
 }
 
 function pickedTotal(c) {
   const picked = c.tabs.filter(t => t.recommended);
-  if (c.recommended_total) return { text: `${c.recommended_total.estimated ? '≈ ' : ''}${c.recommended_total.amount}`, picked };
+  if (c.recommended_total) return { text: `${c.recommended_total.estimated ? '~' : ''}${c.recommended_total.amount}`, picked };
   if (picked.length === 1) {  // one pick: its own yearly price, when it is trusted
     const t = picked[0], i = t.columns.findIndex(x => x.quote_id === t.recommended), p = t.prices[i];
     const cell = t.rows.find(r => r.section === 'price').cells[i];
-    if (p.unit === 'year' && cell.state !== 'review') return { text: `${p.estimated ? '≈ ' : ''}${p.amount}`, picked };
+    if (p.unit === 'year' && cell.state !== 'review') return { text: `${p.estimated ? '~' : ''}${p.amount}`, picked };
   }
   return { text: '—', picked };
 }
@@ -887,7 +889,7 @@ function selectorHtml(c, line) {
 function priceBits(t, i) {
   const p = t.prices[i], cell = t.rows.find(r => r.section === 'price').cells[i];
   const bits = [];
-  if (p.vs_lowest) bits.push(esc(p.vs_lowest));
+  if (p.vs_lowest) bits.push(esc((p.vs_lowest_approx ? '~' : '') + p.vs_lowest));
   if (p.six_month && p.printed) bits.push(`${esc(p.printed)} per 6 months`);
   else if (!p.unit && p.printed && t.line !== 'life') bits.push('term not clear on the quote');
   let sig = '';
@@ -900,7 +902,7 @@ function priceBits(t, i) {
 function bigPrice(p, cell) {
   if (!p.amount) return '<div class="big none">—<small> no price found</small></div>';
   const unit = p.unit === 'year' ? ' / year' : p.unit === 'month' ? ' / month' : '';
-  return `<div class="big${cell.state === 'review' ? ' rv' : ''}"><span class="amt">${p.estimated ? '≈ ' : ''}${esc(p.amount)}</span>${unit ? `<small>${unit}</small>` : ''}${cell.edited ? '<span class="edited">edited</span>' : ''}</div>`;
+  return `<div class="big${cell.state === 'review' ? ' rv' : ''}"><span class="amt">${p.estimated ? '~' : ''}${esc(p.amount)}</span>${unit ? `<small>${unit}</small>` : ''}${cell.edited ? '<span class="edited">edited</span>' : ''}</div>`;
 }
 
 function tableHtml(t) {
@@ -917,7 +919,7 @@ function tableHtml(t) {
   const head = `<tr><th class="lab corner" scope="col"><span class="c1">${plural(cols.length, 'quote')}</span><span class="c2">${esc(t.label)}</span></th>${cols.map((c, i) => {
     const p = t.prices[i], on = c.quote_id === rec;
     const term = c.term_tag === '6-mo' ? '<span class="pill">6-month term</span>' : c.term_tag === 'term?' && t.line !== 'life' ? '<span class="pill check">Term unclear</span>' : '';
-    const mini = p.amount ? `${p.estimated ? '≈ ' : ''}${p.amount}${p.unit === 'year' ? '/yr' : p.unit === 'month' ? '/mo' : ''}` : '';
+    const mini = p.amount ? `${p.estimated ? '~' : ''}${p.amount}${p.unit === 'year' ? '/yr' : p.unit === 'month' ? '/mo' : ''}` : '';
     return `<th class="${rc(i).trim()}" scope="col"><div class="ctop${isSel('price', i) ? ' sel' : ''}"><div class="qh1"><span class="car" title="${esc(c.carrier || 'Unknown carrier')}">${esc(c.carrier || 'Unknown carrier')}</span><button class="icon" data-act="quote" data-c="${i}" aria-label="${esc(c.carrier || 'Unknown carrier')} quote details">⋯</button></div>
       <div class="qh2"><button class="recbtn" data-act="rec" data-c="${i}" aria-pressed="${on}">${on ? 'Recommended' : 'Recommend'}</button>${term}${c.quote_id === cur ? '<span class="pill cur">Current policy</span>' : ''}<span class="mp" aria-hidden="true">${esc(mini)}</span></div></div></th>`;
   }).join('')}</tr>`;
@@ -1357,7 +1359,7 @@ function priceText(t, i, long) {
   const p = t.prices[i];
   if (!p.amount) return 'no price found';
   const per = p.unit === 'year' ? ' a year' : p.unit === 'month' ? ' a month' : '';
-  return `${p.estimated ? (long ? 'about ' : '≈ ') : ''}${p.amount}${long ? per : p.unit === 'year' ? '/yr' : p.unit === 'month' ? '/mo' : ''}`;
+  return `${p.estimated ? (long ? 'about ' : '~') : ''}${p.amount}${long ? per : p.unit === 'year' ? '/yr' : p.unit === 'month' ? '/mo' : ''}`;
 }
 
 function recCard(t) {
@@ -1388,14 +1390,14 @@ function checklist() {
   if (!c.tabs.length) out.push(it(false, 'No quotes yet', 'Add quotes on the comparison page first.'));
   out.push(it(!rv.length, rv.length ? `${plural(rv.length, 'value')} still ${rv.length === 1 ? 'needs' : 'need'} a look` : 'Every flagged value is settled', rv.length ? 'Opens the comparison at the first one' : '', rv.length ? 'check-first' : ''));
   if (c.tabs.length) out.push(it(!missing.length, missing.length ? `No pick yet for ${esc(joinWords(missing.map(t => t.label)))}` : 'A pick for every policy', missing.length ? 'Choose below. Policies without a pick are still compared.' : ''));
-  if (est.length) out.push(it(false, `${plural(est.length, 'picked price')} ${est.length === 1 ? 'is an estimate' : 'are estimates'}`, 'A 6-month price counts twice for the year. Marked as estimated in the proposal.'));
+  if (est.length) out.push(it(false, `${plural(est.length, 'picked price')} ${est.length === 1 ? 'is an estimate' : 'are estimates'}`, 'A 6-month price counts twice for the year. The proposal shows the 6-month price under it.'));
   picked.forEach(t => {
     const q = c.quotes[t.recommended];
     if (q && q.expires) out.push(it(false, `${esc(q.carrier)} ${esc(lower(t.label))} quote: ${esc(q.expires)}`, c.export.gtk ? 'Printed under Good to know' : 'Good to know is off, so this is not printed'));
   });
   if (busy) out.push(it(false, `${plural(busy, 'file is', 'files are')} still being read`, "They join the proposal when they're done."));
   if (failed) out.push(it(false, `${failed === 1 ? "1 file couldn't" : `${failed} files couldn't`} be read`, 'Retry or remove it', 'show-files'));
-  out.push(it(!!c.client.address, c.client.address ? 'Client name and address' : 'No address on file', c.client.address ? `${esc(c.client.name)} · ${esc(c.client.address)}` : 'Optional. It prints under the client name.', 'edit-client'));
+  out.push(it(!!c.client.address, c.client.address ? 'Client name and address' : 'No address on file', c.client.address ? `${esc(c.client.name)} · ${esc(c.client.address)}${c.client.property_address ? ` · Property: ${esc(c.client.property_address)}` : ''}` : 'Optional. It prints under the client name.', 'edit-client'));
   return out.join('');
 }
 
@@ -1407,9 +1409,26 @@ function mailText() {
     return `${t.label}: ${t.columns[i].carrier || 'Unknown carrier'}, ${priceText(t, i, true)}` + t.reasons.map(r => `\n  - ${r}`).join('');
   }).join('\n\n');
   const rt = c.recommended_total;
-  const total = c.export.total && rt ? `\n\nAltogether that's ${rt.estimated ? 'about ' : ''}${rt.amount} a year (about ${rt.per_month} a month).` : '';
   const agency = c.agency || {};
-  return `Hi,\n\nI compared the quotes we received for you. Here's what I recommend:\n\n${parts || '(Pick a quote for each policy on the left.)'}${total}${c.notes.trim() ? `\n\n${c.notes.trim()}` : ''}\n\nThe full side-by-side comparison is attached.\n\n${[agency.name, agency.phone].filter(Boolean).join(' · ')}`;
+  return fillTemplate(c.email_template || DEFAULT_EMAIL, {
+    client: c.client.name,
+    recommendations: parts || '(Pick a quote for each policy on the left.)',
+    total: c.export.total && rt ? `Altogether that's ${rt.estimated ? 'about ' : ''}${rt.amount} a year (about ${rt.per_month} a month).` : '',
+    notes: c.notes.trim(),
+    signature: [agency.name, agency.phone].filter(Boolean).join(' · '),
+  });
+}
+
+// email.txt's wording (the broker's to edit) with {placeholders} filled in. A line that is only
+// placeholders with nothing to fill is left out; an unknown {word} stays as typed, so a typo shows.
+const DEFAULT_EMAIL = "Hi,\n\nI compared the quotes we received for you. Here's what I recommend:\n\n{recommendations}\n\n{total}\n\n{notes}\n\nThe full side-by-side comparison is attached.\n\n{signature}\n";
+function fillTemplate(tpl, values) {
+  const fill = m => m.replace(/\{(\w+)\}/g, (all, k) => (Object.prototype.hasOwnProperty.call(values, k.toLowerCase()) ? values[k.toLowerCase()] : all));
+  const lines = String(tpl).replace(/\r\n?/g, '\n').split('\n').filter(line => {
+    const only = /\{\w+\}/.test(line) && !line.replace(/\{\w+\}/g, '').trim();
+    return !(only && !fill(line).trim());
+  });
+  return lines.map(fill).join('\n').replace(/\n{3,}/g, '\n\n').trim();
 }
 
 function setPvStatus(text) { const el = $('#pv-status'); if (el) el.textContent = text; }
@@ -1783,9 +1802,9 @@ document.addEventListener('submit', e => {
   const f = e.target;
   if (f.id === 'new-form') submitNew().catch(fail);
   else if (f.id === 'client-form') {
-    const name = $('#cl-name').value.trim(), addr = $('#cl-addr').value.trim();
+    const name = $('#cl-name').value.trim(), addr = $('#cl-addr').value.trim(), prop = $('#cl-prop').value.trim();
     if (!name) { const err = $('#cl-err'); err.textContent = "Enter the client's name."; err.hidden = false; return; }
-    patchComp({ client_name: name, address: addr }).then(v => { closeModal(true); setComp(v); toast('Saved'); }).catch(fail);
+    patchComp({ client_name: name, address: addr, property_address: prop }).then(v => { closeModal(true); setComp(v); toast('Saved'); }).catch(fail);
   } else if (f.classList.contains('addr')) {
     const input = f.querySelector('input');
     const text = input.value.trim();

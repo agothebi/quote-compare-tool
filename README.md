@@ -77,13 +77,68 @@ cd $HOME\quote-compare-tool; git pull
 Then start the app as usual. It installs anything new by itself.
 
 
+## Changing the AI model
+
+The app uses the model named on the `model:` line of `config/settings.yaml`. To use a different one
+on this computer, set it in your `.env` file instead. Updates never change that file.
+
+1. Close the app.
+2. Open `.env`: paste `open -e ~/quote-compare-tool/.env` into Terminal (Mac) or
+   `notepad $HOME\quote-compare-tool\.env` into PowerShell (Windows).
+3. Add a line with the model, for example `QUOTE_COMPARE_MODEL=claude-sonnet-5`.
+4. Make sure the API key for that model's provider is in the file too: `ANTHROPIC_API_KEY=` for
+   Claude models, `GEMINI_API_KEY=` for Gemini models.
+5. Save and start the app again.
+
+The models you can use are listed under `pricing:` in `config/settings.yaml`. A model that isn't
+listed needs its price per million tokens added there first, because the spending limit
+(`spend_limit_usd_per_month`, in the same file) is worked out from it. If the name is wrong, the
+app's window says so when it starts. Quotes already read keep their results; files added after the
+change use the new model. To go back, delete the `QUOTE_COMPARE_MODEL` line.
+
+
+## Changing the email text
+
+The Proposal page's email text comes from `email.txt` in the `quote-compare-tool` folder. The file
+appears after the first start. Edit it in any text editor and save; the next Proposal page you open
+uses the new text. Updates never change this file.
+
+The words in curly brackets are filled in by the app. Keep them spelled exactly as they are; you
+can move them, or delete the ones you don't want:
+
+- `{client}`: the client's name
+- `{recommendations}`: each recommended policy, with its carrier, price and reasons
+- `{total}`: the yearly total, when Household total is ticked in the proposal options
+- `{notes}`: your note on the Proposal page
+- `{signature}`: the agency's name and phone number
+
+A line holding only a bracket word with nothing to fill in is left out. If the file is deleted or
+left empty, the app uses the default text. To start over, copy this back into `email.txt`:
+
+```
+Hi,
+
+I compared the quotes we received for you. Here's what I recommend:
+
+{recommendations}
+
+{total}
+
+{notes}
+
+The full side-by-side comparison is attached.
+
+{signature}
+```
+
+
 ## If something goes wrong
 
 - **The page does not open:** wait a few seconds and reload it, or go to http://127.0.0.1:8000.
 - **Quotes are not being read:** the window the app runs in says why. If the API key is missing or
   wrong, close the app and paste `open -e ~/quote-compare-tool/.env` into Terminal (Mac) or
   `notepad $HOME\quote-compare-tool\.env` into PowerShell (Windows). Put the right key after
-  `GEMINI_API_KEY=`, save, and start the app again.
+  `GEMINI_API_KEY=` (or `ANTHROPIC_API_KEY=` for a Claude model), save, and start the app again.
 - **Anything else:** send a photo or a copy of the text in the app's window to whoever set this up
   for you.
 

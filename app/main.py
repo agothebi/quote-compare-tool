@@ -166,6 +166,7 @@ def shutdown():
 class NewComparison(BaseModel):
     client_name: str = Field(min_length=1, max_length=200)
     address: str = Field(default="", max_length=300)
+    property_address: str = Field(default="", max_length=300)
     other_names: list[str] = Field(default_factory=list, max_length=20)
 
 
@@ -190,6 +191,7 @@ class ComparisonPatch(BaseModel):
 
     client_name: str | None = Field(default=None, min_length=1, max_length=200)
     address: str | None = Field(default=None, max_length=300)
+    property_address: str | None = Field(default=None, max_length=300)
     notes: str | None = Field(default=None, max_length=20_000)
     base_notes: str | None = Field(default=None, max_length=20_000)
     recommend_line: str | None = Field(default=None, max_length=40)
@@ -302,7 +304,7 @@ def board_move(body: BoardMove):
 def create_comparison(body: NewComparison):
     if not body.client_name.strip():
         raise HTTPException(422, "Enter the client's name.")
-    comp = storage.create(body.client_name, body.address, body.other_names)
+    comp = storage.create(body.client_name, body.address, body.other_names, body.property_address)
     return present.view(comp)
 
 
@@ -327,6 +329,8 @@ def patch_comparison(cid: str, body: ComparisonPatch):
             comp["client"]["name"] = body.client_name.strip()
         if body.address is not None:
             comp["client"]["address"] = body.address.strip()
+        if body.property_address is not None:
+            comp["client"]["property_address"] = body.property_address.strip()
         if body.notes is not None:
             if body.base_notes is not None and body.base_notes != comp.get("notes", ""):
                 raise storage.Conflict("These notes were changed in another window.", comp.get("notes", ""))

@@ -1,8 +1,9 @@
 """One forced tool call to the configured LLM provider.
 
 Both providers get the same system prompt, the same user text, and the same JSON schema as
-the only tool, and must answer by calling it. Switching provider is one line in
-config/settings.yaml (`llm.provider`); nothing else in the pipeline knows which one ran.
+the only tool, and must answer by calling it. Switching model is one line: `llm.model` in
+config/settings.yaml, or QUOTE_COMPARE_MODEL in .env on one computer. The provider follows from the
+pricing table the model is listed in; nothing else in the pipeline knows which one ran.
 
     python -m app.llm        # check the key and list models for the configured provider
 """
@@ -58,13 +59,21 @@ def override(**kw) -> None:
     _OVERRIDE.update(kw)
 
 
+PROVIDERS = ("gemini", "anthropic")
+MODEL_ENV = "QUOTE_COMPARE_MODEL"  # in .env: this computer's model, kept when the app is updated
+
+
 def llm_settings() -> dict:
+    load_env()
     cfg = settings()["llm"]
-    provider = cfg["provider"]
-    if provider not in ("gemini", "anthropic"):
-        raise LLMError(f"unknown llm.provider {provider!r}")
     over = {k: v for k, v in _OVERRIDE.items() if v is not None}
-    return {"provider": provider, **cfg[provider], **over,
+    model = over.get("model") or (os.environ.get(MODEL_ENV) or "").strip() or cfg.get("model")
+    provider = next((p for p in PROVIDERS if model in ((cfg.get(p) or {}).get("pricing") or {})), None)
+    if provider is None:
+        known = ", ".join(m for p in PROVIDERS for m in ((cfg.get(p) or {}).get("pricing") or {}))
+        raise LLMError(f"Unknown model {model!r}. Use one of: {known}. "
+                       "(A new model needs its price added under pricing in config/settings.yaml.)")
+    return {"provider": provider, **cfg[provider], **over, "model": model,
             "temperature": cfg.get("temperature"), "max_output_tokens": cfg["max_output_tokens"],
             "spend_limit_usd_total": cfg.get("spend_limit_usd_total"),
             "spend_limit_usd_per_month": cfg.get("spend_limit_usd_per_month"),

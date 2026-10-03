@@ -121,7 +121,8 @@ def slug(name: str) -> str:
 
 # ---------------------------------------------------------------- comparisons
 
-def create(client_name: str, address: str = "", other_names: list[str] | None = None) -> dict:
+def create(client_name: str, address: str = "", other_names: list[str] | None = None,
+           property_address: str = "") -> dict:
     today = datetime.now().strftime("%Y-%m-%d")
     base = f"{today}_{slug(client_name)}"
     root().mkdir(parents=True, exist_ok=True)
@@ -134,6 +135,7 @@ def create(client_name: str, address: str = "", other_names: list[str] | None = 
     comp = normalize({
         "id": cid, "revision": 1, "created_at": now(), "updated_at": now(),
         "client": {"name": client_name.strip(), "address": (address or "").strip(),
+                   "property_address": (property_address or "").strip(),
                    "other_names": [n.strip() for n in (other_names or []) if n.strip()]},
         "files": [], "quotes": [], "edits": [], "kept": {}, "recommendation": {}, "notes": "",
     })
@@ -158,6 +160,8 @@ def normalize(comp: dict) -> dict:
         comp["client"] = {}
     if not isinstance(comp["client"].get("name"), str):
         comp["client"]["name"] = ""
+    if not isinstance(comp["client"].get("property_address"), str):  # the insured property, when not the client's address
+        comp["client"]["property_address"] = ""
     for key in ("created_at", "updated_at"):
         if not isinstance(comp.get(key), str):
             comp[key] = ""

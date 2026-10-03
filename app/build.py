@@ -123,6 +123,12 @@ def _entry(it: dict) -> str:
     return f"{text} (premium, no limit printed)" if note else text
 
 
+def vehicle_names(q: dict) -> list[str]:
+    """The quote's vehicles as printed, in order, blanks dropped. The Vehicles row and every value
+    per vehicle use this one list, so their lines correspond."""
+    return [v.strip() for v in q.get("vehicles") or [] if isinstance(v, str) and v.strip()]
+
+
 def items_cell(q: dict, items: list[dict], multiple: bool = False, per_vehicle: bool = False) -> dict:
     if not items:
         return {"lines": ["—"], "state": "not_listed", "reasons": [], "items": [], "note": None}
@@ -133,23 +139,36 @@ def items_cell(q: dict, items: list[dict], multiple: bool = False, per_vehicle: 
         text, note = item_text(items[0])
         return {"lines": [text], "state": states[0], "reasons": reasons, "items": refs, "note": note}
     lines = []
-    by_vehicle = [it for it in items if it.get("vehicle")]
-    names = q.get("vehicles") or [it["vehicle"] for it in by_vehicle]
-    if by_vehicle and not per_vehicle and len(by_vehicle) == len(items) and len(by_vehicle) == len(names) \
+    by_vehicle = [it for it in items if isinstance(it.get("vehicle"), str) and it["vehicle"].strip()]
+    listed = vehicle_names(q)  # what the Vehicles row shows
+    names = listed or list(dict.fromkeys(it["vehicle"].strip() for it in by_vehicle))
+    lowered = [v.lower() for v in names]
+    matches, seen = [], {}
+    for v in lowered:  # per vehicle, in the Vehicles row's order
+        found = [it for it in by_vehicle if it["vehicle"].strip().lower() == v]
+        n, j = lowered.count(v), seen.get(v, 0)
+        seen[v] = j + 1
+        matches.append(found[j::n] if n > 1 else found)  # two vehicles printed alike: one value each, in order
+    rest = [it for it in items if it not in by_vehicle]
+    if by_vehicle and not rest and len(by_vehicle) == len(names) and all(len(m) == 1 for m in matches) \
             and len({(it.get("value"), bool(it.get("value"))) for it in by_vehicle}) == 1 and by_vehicle[0].get("value"):
-        # a policy-level limit printed once per vehicle (e.g. liability): the same for every vehicle
+        # every vehicle has this one value (a liability limit printed per vehicle, the same deductible on each)
         return {"lines": [by_vehicle[0]["value"]], "state": worst_state(states), "reasons": reasons,
                 "items": refs, "note": "same for every vehicle" if len(names) > 1 else None}
     if by_vehicle:
-        names = q.get("vehicles") or [it["vehicle"] for it in by_vehicle]
-        for v in names:
-            match = [it for it in by_vehicle if (it["vehicle"] or "").strip().lower() == v.strip().lower()]
+        # One line per vehicle in the Vehicles row's order, "—" holding the place of a vehicle without one,
+        # so the vehicle names need not be repeated. They stay when position alone would mislead: a vehicle
+        # with two values in this row, values for no vehicle mixed in, or no Vehicles row to line up with.
+        by_position = bool(listed) and len(names) > 1 and not rest and all(len(m) <= 1 for m in matches)
+        for v, match in zip(names, matches):
             label = short_vehicle(v, names)
-            lines += [(f"{label}: " if len(names) > 1 else "") + _entry(it) for it in match] or [f"{label}: —"]
-        # a vehicle name the quote's vehicle list does not have (verify marked it review)
-        known = {v.strip().lower() for v in names}
+            if by_position:
+                lines.append(_entry(match[0]) if match else "—")
+            else:
+                lines += [(f"{label}: " if len(names) > 1 else "") + _entry(it) for it in match] or [f"{label}: —"]
+        # a vehicle name the quote's vehicle list does not have (verify marked it review): always named
+        known = set(lowered)
         lines += [f"{it['vehicle']}: {_entry(it)}" for it in by_vehicle if it["vehicle"].strip().lower() not in known]
-    rest = [it for it in items if not it.get("vehicle")]
     if multiple:
         lines += [f"{category(it.get('label'))}: {_entry(it)}" for it in rest]
     else:
@@ -161,7 +180,7 @@ def price_cell(q: dict, lowest: bool) -> dict:
     price = q.get("price") or {}
     lines = [price.get("value") or "—"]
     if q.get("term_months") == 6 and annualized(q) is not None:
-        lines.append(f"≈ {money.fmt(annualized(q))} per year (estimated)")
+        lines.append(f"~{money.fmt(annualized(q))} per year")
     return {"lines": lines, "state": price.get("check", {}).get("state", "review") if price.get("value") else "review",
             "reasons": price.get("check", {}).get("reasons", []), "note": "Lowest price" if lowest else None,
             "period": price_period(q),
@@ -287,7 +306,7 @@ def build_tab(line: str, qs: list[dict], cfg: dict, kept: list[str]) -> dict:
 
     if line in VEHICLE_ROW:
         rows.append({"section": "vehicles", "key": "vehicles", "label": VEHICLE_ROW[line], "cells": [
-            {"lines": q.get("vehicles") or ["—"], "state": "found" if q.get("vehicles") else "not_listed",
+            {"lines": vehicle_names(q) or ["—"], "state": "found" if vehicle_names(q) else "not_listed",
              "reasons": [], "items": [], "note": None} for q in qs]})
 
     placed: dict[str, set[int]] = {q["id"]: set() for q in qs}

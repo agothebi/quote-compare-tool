@@ -17,7 +17,7 @@ import uuid
 from decimal import Decimal
 
 from app import build, money, storage, verify
-from app.config import lines_config, settings
+from app.config import email_template, lines_config, settings
 
 # A value that says the coverage is not part of this quote. ("None" and "$0" are left out on purpose:
 # in a deductible row they mean no deductible, the best case.) The screen uses the cell's `excluded`
@@ -283,6 +283,7 @@ def view(comp: dict) -> dict:
         "lines": [{"key": k, "label": v} for k, v in line_labels.items()] + [{"key": "unknown", "label": "Other"}],
         "reason_suggestions": list((settings().get("recommendation_reasons") or {}).values()),
         "agency": {k: (settings().get("agency") or {}).get(k, "") for k in ("name", "phone")},
+        "email_template": email_template(),
         "recommended_total": recommended_total(tabs, by_id),
     }
 
@@ -357,15 +358,16 @@ def price_summaries(tab: dict, quotes: dict) -> list[dict]:
         info = {"amount": dollars(cp[1]) if cp else (printed or None), "unit": cp[0] if cp else None,
                 "estimated": bool(cp) and q.get("term_months") == 6 and cp[0] == "year",
                 "printed": printed, "six_month": q.get("term_months") == 6,
-                "lowest": lowest[i], "lowest_if": None, "vs_lowest": None, "bar": None,
+                "lowest": lowest[i], "lowest_if": None, "vs_lowest": None, "vs_lowest_approx": False, "bar": None,
                 "excludes": excludes(tab, i),
                 "below_umbrella": any(n["key"] == "below_umbrella_requirement"
                                       for n in _gtk_cell(tab, i).get("notices", []))}
         if low is not None and cp:
             if i != low:
                 diff = cp[1] - comparable[low][1]
-                approx = info["estimated"] or (qs[low].get("term_months") == 6)
-                info["vs_lowest"] = f"{'≈ ' if approx else ''}+{dollars(diff)} vs lowest" if diff > 0 else None
+                info["vs_lowest"] = f"+{dollars(diff)} vs lowest" if diff > 0 else None
+                # either price was doubled from a 6-month quote: the difference is approximate too
+                info["vs_lowest_approx"] = bool(info["vs_lowest"]) and (info["estimated"] or qs[low].get("term_months") == 6)
             if top and top > 0:
                 info["bar"] = max(2, round(float(cp[1] / top) * 100))
         elif any(untrusted) and i == cheapest and untrusted[i] and printed:
@@ -483,8 +485,8 @@ def facts(tab: dict, quotes: dict, all_quotes: list[dict], choices: dict) -> lis
                     len(out) < 4)
         low = next((i for i, p in enumerate(prices) if p["lowest"]), None)
         if low is not None and low != r and prices[r]["vs_lowest"]:
-            about = "about " if prices[r]["vs_lowest"].startswith("≈") else ""
-            diff = prices[r]["vs_lowest"].replace(" vs lowest", "").lstrip("≈ +")
+            about = "about " if prices[r].get("vs_lowest_approx") else ""
+            diff = prices[r]["vs_lowest"].replace(" vs lowest", "").lstrip("+")
             per = "a year" if prices[r]["unit"] == "year" else "a month"
             add("more_than_lowest", f"Costs {about}{diff} {per} more than {cols[low]['carrier']}", "price row", False)
         if prices[r]["excludes"]:
@@ -591,7 +593,7 @@ def recommended_total(tabs: list[dict], quotes: dict) -> dict | None:
     label = f"{next(iter(carriers))} {joined} together" if len(carriers) == 1 else f"Recommended {joined} together"
     amount = money.fmt(total)
     return {"label": label[0].upper() + label[1:], "amount": amount, "estimated": estimated,
-            "text": f"{'≈ ' if estimated else ''}{amount} per year{' (estimated)' if estimated else ''}",
+            "text": f"{'approx. ' if estimated else ''}{amount} per year",
             "per_month": f"${(total / 12).quantize(Decimal(1)):,}",  # the yearly total / 12, whole dollars ("about $X a month")
             "left_out": monthly}
 

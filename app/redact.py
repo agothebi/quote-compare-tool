@@ -11,7 +11,7 @@ import argparse
 import re
 import sys
 import unicodedata
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 
 from app.config import lines_config, settings
 
@@ -40,6 +40,7 @@ class Client:
     name: str = ""
     address: str = ""
     other_names: list[str] = field(default_factory=list)
+    property_address: str = ""  # the insured home or rental, when it is not the client's own address
 
 
 @dataclass
@@ -287,7 +288,7 @@ def with_labeled_names(pages: list[dict], client: Client, stop: set[str]) -> Cli
              if " ".join(n.lower().split()) not in known]
     if not extra:
         return client
-    return Client(client.name, client.address, [*client.other_names, *extra])
+    return replace(client, other_names=[*client.other_names, *extra])
 
 
 PRIORITY = {"name": 0, "address": 1, "email": 2, "vin": 3, "ssn": 4, "license": 4, "dob": 5, "phone": 6, "name_word": 7}
@@ -295,7 +296,8 @@ PRIORITY = {"name": 0, "address": 1, "email": 2, "vin": 3, "ssn": 4, "license": 
 
 def find_spans(text: str, client: Client, stop: set[str] | None = None) -> list[Span]:
     stop = stop if stop is not None else stoplist()
-    candidates = _find_people(text, client, stop) + _find_address(text, client.address) + _find_patterns(text)
+    candidates = (_find_people(text, client, stop) + _find_address(text, client.address)
+                  + _find_address(text, client.property_address) + _find_patterns(text))
     candidates.sort(key=lambda s: (PRIORITY[s.kind], -(s.end - s.start), s.start))
     chosen: list[Span] = []
     for s in candidates:
