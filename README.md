@@ -163,3 +163,18 @@ Don't edit or rename the files inside the backup folder.
 
 Your clients' quotes and comparisons stay on this computer, in the `data` folder inside
 `quote-compare-tool`. They are never uploaded to GitHub.
+
+
+## Technical notes (for an agent)
+
+- Needs Python 3.13, Git and Tesseract. Windows: the `winget` line in step 2 (then open a new
+  PowerShell so it finds them). Mac: Homebrew, then the start script installs the rest.
+- `start.bat` / `start.command` create `.venv`, install `requirements.txt` into it, then run the
+  app with `python -m app.launch`. It is a local web server that keeps running until its window is
+  closed, so when scripting the setup, run it in the background. `--no-browser` skips opening the browser.
+- The API key goes in `.env` (copy `.env.example`; the key line is `GEMINI_API_KEY=`). The app only
+  asks for it when started in a real terminal window.
+- It works when http://127.0.0.1:8000/api/version answers (or the next free port if 8000
+  is taken; the window prints the address). The window also prints a warning if the key or
+  Tesseract is missing.
+- On Windows, Tesseract is found in `C:\Program Files\Tesseract-OCR` without being on PATH.
