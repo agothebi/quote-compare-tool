@@ -23,12 +23,11 @@ When it finishes, it shows a few commands under "Next steps". Copy those, paste 
 **3. Download and start the app:**
 
 ```
-brew install --cask git-credential-manager && cd ~ && git clone https://github.com/agothebi/quote-compare-tool.git && cd quote-compare-tool && ./start.command
+cd ~ && git clone https://github.com/agothebi/quote-compare-tool.git && cd quote-compare-tool && ./start.command
 ```
 
-If a window asks you to sign in to GitHub, sign in. The first start then takes a few minutes while
-the app installs what it needs. When it asks for your API key, paste it and press Return. The app
-opens in your browser.
+The first start takes a few minutes while the app installs what it needs. When it asks for your API
+key, paste it and press Return. The app opens in your browser.
 
 **From now on:** open the `quote-compare-tool` folder in your home folder and double-click
 `start.command`. Keep the window that opens while you use the app, and close it when you are done.
@@ -52,9 +51,8 @@ winget install -e --id Python.Python.3.13 --accept-package-agreements --accept-s
 cd $HOME; git clone https://github.com/agothebi/quote-compare-tool.git; cd quote-compare-tool; .\start.bat
 ```
 
-If a window asks you to sign in to GitHub, sign in. The first start then takes a few minutes while
-the app installs what it needs. When it asks for your API key, paste it and press Enter. The app
-opens in your browser.
+The first start takes a few minutes while the app installs what it needs. When it asks for your API
+key, paste it and press Enter. The app opens in your browser.
 
 **From now on:** open the `quote-compare-tool` folder in your user folder and double-click `start.bat`.
 Keep the window that opens while you use the app, and close it when you are done.
@@ -65,16 +63,17 @@ Keep the window that opens while you use the app, and close it when you are done
 When you are told there is a new version, close the app and paste this into Terminal (Mac):
 
 ```
-cd ~/quote-compare-tool && git pull
+cd ~/quote-compare-tool && git pull --autostash
 ```
 
 or this into PowerShell (Windows):
 
 ```
-cd $HOME\quote-compare-tool; git pull
+cd $HOME\quote-compare-tool; git pull --autostash
 ```
 
-Then start the app as usual. It installs anything new by itself.
+Then start the app as usual. It installs anything new by itself. Any settings you changed in
+`config/settings.yaml` are kept.
 
 
 ## Changing the AI model
@@ -168,12 +167,17 @@ Your clients' quotes and comparisons stay on this computer, in the `data` folder
 ## Technical notes (for an agent)
 
 - Needs Python 3.13, Git and Tesseract. Windows: the `winget` line in step 2 (then open a new
-  PowerShell so it finds them). Mac: Homebrew, then the start script installs the rest.
+  PowerShell so it finds them; Windows may ask the user to approve each install). Mac: Homebrew,
+  whose installer needs the user's Mac password, so hand that step to the user; the start script
+  installs the rest.
 - `start.bat` / `start.command` create `.venv`, install `requirements.txt` into it, then run the
   app with `python -m app.launch`. It is a local web server that keeps running until its window is
   closed, so when scripting the setup, run it in the background. `--no-browser` skips opening the browser.
 - The API key goes in `.env` (copy `.env.example`; the key line is `GEMINI_API_KEY=`). The app only
-  asks for it when started in a real terminal window.
+  asks for it when started in a real terminal window. Ask the user for the key; never print it,
+  commit `.env`, or put the key anywhere else.
+- Updates: `git pull --autostash` (keeps local edits to `config/settings.yaml`). Never commit or
+  push from this folder; `data/`, `.env` and `email.txt` are the user's and stay untracked.
 - It works when http://127.0.0.1:8000/api/version answers (or the next free port if 8000
   is taken; the window prints the address). The window also prints a warning if the key or
   Tesseract is missing.
