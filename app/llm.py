@@ -81,9 +81,22 @@ def llm_settings() -> dict:
             "request_timeout_seconds": cfg.get("request_timeout_seconds") or 180}
 
 
-def price(s: dict) -> dict | None:
-    """{'input': usd, 'output': usd} per 1M tokens for the configured model, or None if unknown."""
-    return (s.get("pricing") or {}).get(s["model"])
+def price(s: dict, day: str | None = None) -> dict | None:
+    """{'input': usd, 'output': usd, ...} per 1M tokens for the configured model on `day` (today,
+    Pacific time), or None if unknown. A model's price is one entry, or a list of entries where each
+    later one carries `from: YYYY-MM-DD`: the last one already in effect applies (a price change
+    announced ahead is written down once, and the spend caps follow it on the day)."""
+    entry = (s.get("pricing") or {}).get(s["model"])
+    if isinstance(entry, dict):
+        return entry
+    if not isinstance(entry, list):
+        return None
+    day = day or _today()
+    current = None
+    for e in entry:
+        if isinstance(e, dict) and str(e.get("from") or "0000-00-00") <= day:
+            current = e
+    return current
 
 
 def cost_usd(s: dict, input_tokens: int, output_tokens: int, cached: int = 0, written: int = 0) -> float:

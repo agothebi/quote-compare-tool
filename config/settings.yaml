@@ -1,29 +1,42 @@
-# Runtime settings. API keys are NOT stored here: put them in .env (next to this project's
-# README) or the environment, under the variable named by api_key_env below.
+# Runtime settings. API keys go in .env, not here.
+
+# CHANGE DETAILS ABOUT YOUR COMPANY HERE! THIS IS WHAT GOES ON THE PDF
+# **************************************
+agency:
+  name: "ANT Insurance"
+  tagline: "Business & Personal"
+  address: "210 Delburg Street, Davidson NC 28036"
+  phone: "704-530-6096"
+  website: "insure-ant.com"
+  disclaimer: "This comparison is provided for informational purposes only. Coverage terms are subject to policy language."
+# **************************************
+
 llm:
-  # The AI model that reads the quotes: any model listed under a pricing table below. The app
-  # uses that table's provider (Google or Anthropic) and its API key from .env. To use another
-  # model on one computer, put QUOTE_COMPARE_MODEL=<model> in .env instead (see the README).
+  # For any model from a pricing table below, its provider and API key are picked automatically.
+  # Usage log can be found in data/llm_usage.json
   model: "gemini-3.8-flash"
-  temperature: 0                 # sent only to models that accept it (Claude Sonnet 5 rejects it)
+  temperature: 0
   max_output_tokens: 16000
-  # Spend guardrails. Every call's cost is logged in data/llm_usage.json; before each call the
-  # worst case (whole input + max_output_tokens) is checked against these caps.
-  spend_limit_usd_per_month: 5.00  # per provider, calendar month (Pacific time). Production: set to the agency's budget
-  spend_limit_usd_per_day: 3.50    # a runaway loop stops here
-  request_timeout_seconds: 180     # a call that takes longer fails (Retry) instead of blocking the queue
+  request_timeout_seconds: 180
+  
+  # CHANGE YOUR MONTHLY AND DAILY SPEND LIMIT HERE! BASED ON PACIFIC TIME
+  # **************************************
+  spend_limit_usd_per_month: 5.00
+  spend_limit_usd_per_day: 3.50
+  # **************************************
+
   gemini:
     api_key_env: "GEMINI_API_KEY"
-    thinking_level: "low"          # Gemini 3.x: minimal | low | medium | high (low keeps tokens down)
-    thinking_budget: null        # Gemini 2.5 only: max thinking tokens
-    daily_request_limit: 200     # paid tier; a backstop against runaway loops (free tier was 20)
+    thinking_level: "low"        # Gemini 3.x options: minimal | low | medium | high
+    thinking_budget: null        # For Gemini 2.5 only
+    daily_request_limit: 200
     min_seconds_between_requests: 1
-    # USD per 1M tokens, paid tier (ai.google.dev/gemini-api/docs/pricing, read 2026-09-25).
-    # Output includes thinking tokens. 3.6-3.8 Flash prices double on 2027-01-01.
+    # USD per 1M tokens (output includes thinking). A price change is a second entry with `from:`;
+    # the app switches on that day, so the spend limits stay right. 3.6-3.8 Flash double on 2027-01-01.
     pricing:
-      gemini-3.8-flash: {input: 0.75, output: 3.75}
-      gemini-3.7-flash: {input: 0.75, output: 3.75}
-      gemini-3.6-flash: {input: 0.75, output: 3.75}
+      gemini-3.8-flash: [{input: 0.75, output: 3.75}, {from: "2027-01-01", input: 1.50, output: 7.50}]
+      gemini-3.7-flash: [{input: 0.75, output: 3.75}, {from: "2027-01-01", input: 1.50, output: 7.50}]
+      gemini-3.6-flash: [{input: 0.75, output: 3.75}, {from: "2027-01-01", input: 1.50, output: 7.50}]
       gemini-3.5-flash: {input: 1.50, output: 9.00}
       gemini-3.5-flash-lite: {input: 0.30, output: 2.50}
   anthropic:
@@ -31,45 +44,38 @@ llm:
     daily_request_limit: 200
     min_seconds_between_requests: 0
     pricing:
-      claude-sonnet-5: {input: 2.00, output: 10.00, cached_input: 0.20, cache_write: 2.50}  # cache: 0.1x read, 1.25x write
+      claude-sonnet-5: {input: 2.00, output: 10.00, cached_input: 0.20, cache_write: 2.50}
 prompt_version: "13"              # bump when prompts/extract_system.md changes
 ocr:
   dpi: 300
   preview_dpi: 110
   tesseract_psm: 6
-  layout: true                   # place OCR words by x position so table columns stay aligned
-  tesseract_cmd: null            # set a full path on Windows if Tesseract is not on PATH
+  layout: true                   # keep table columns aligned
+  tesseract_cmd: null            # Windows: full path if Tesseract isn't on PATH
 reader:
   min_text_layer_chars: 200
   max_image_page_fraction: 0.25
-  ocr_images_on_text_pages: true # text-layer pages: OCR images (logos) whose words the text layer lacks
+  ocr_images_on_text_pages: true # OCR images (e.g. logos) on text pages
 redaction:
   enabled: true
 verify:
   sum_tolerance: 0.05
 cache_dir: "data/cache"
-backup:                          # copies of the clients outside the app folder (app/backup.py)
+backup:                          # client backups outside the app folder
   enabled: true
-  dir: null                      # null = Documents/Quote Compare Backups; or QUOTE_COMPARE_BACKUP_DIR in .env
-  every_minutes: 60              # while the app runs; only when something changed
+  dir: null                      # null = Documents/Quote Compare Backups (or QUOTE_COMPARE_BACKUP_DIR in .env)
+  every_minutes: 60              # only if something changed
 app:
   host: "127.0.0.1"              # local only; never 0.0.0.0
   port: 8000
   comparisons_dir: "data/comparisons"
   max_upload_mb: 25
   max_pages_per_file: 40
-  auto_recheck: true             # re-run extraction when lines.yaml or the prompt version changes
-recommendation_reasons:          # one-click suggestions on the proposal page: each adds a reason of the broker's own
+  auto_recheck: true             # re-extract when lines.yaml or prompt_version changes
+recommendation_reasons:          # one-click reasons on the proposal page
   best_price: "Best price"
   best_coverage: "Best coverage"
   bundle_savings: "Bundle savings"
   lower_deductibles: "Lower deductibles"
   strong_carrier: "Strong carrier"
   client_preference: "Client's preference"
-agency:                          # printed on the client PDF
-  name: "ANT Insurance"
-  tagline: "Business & Personal"
-  address: "210 Delburg Street, Davidson NC 28036"
-  phone: "704-530-6096"
-  website: "insure-ant.com"
-  disclaimer: "This comparison is provided for informational purposes only. Coverage terms are subject to policy language."
