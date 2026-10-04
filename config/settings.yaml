@@ -48,6 +48,10 @@ redaction:
 verify:
   sum_tolerance: 0.05
 cache_dir: "data/cache"
+backup:                          # copies of the clients outside the app folder (app/backup.py)
+  enabled: true
+  dir: null                      # null = Documents/Quote Compare Backups; or QUOTE_COMPARE_BACKUP_DIR in .env
+  every_minutes: 60              # while the app runs; only when something changed
 app:
   host: "127.0.0.1"              # local only; never 0.0.0.0
   port: 8000

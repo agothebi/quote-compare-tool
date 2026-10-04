@@ -23,7 +23,7 @@ from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, ConfigDict, Field, StrictBool
 
-from app import present, storage, version
+from app import backup, present, storage, version
 from app.config import DATA_DIR, ROOT, settings
 from app.worker import current_versions, worker
 
@@ -55,8 +55,10 @@ async def lifespan(app: FastAPI):
     setup_logging()
     storage.root().mkdir(parents=True, exist_ok=True)
     worker.start()
+    backup.timer.start()  # a backup as the app starts, then each hour something changed
     yield
     worker.stop()
+    backup.timer.stop()
 
 
 app = FastAPI(title="Quote Compare", lifespan=lifespan, docs_url=None, redoc_url=None, openapi_url=None)
@@ -95,13 +97,18 @@ async def not_found(request: Request, exc: storage.NotFound):
 @app.exception_handler(storage.Damaged)
 async def damaged(request: Request, exc: storage.Damaged):
     log.error("comparison.json is damaged: %s", exc)
-    return JSONResponse({"error": "This comparison's saved file is damaged, so it can't be opened. Restore its "
-                                  "comparison.json from a backup, or delete the comparison."}, status_code=500)
+    return JSONResponse({"error": "This comparison's saved file is damaged, so it can't be opened. Restore it from "
+                                  "Backups at the bottom of the board, or delete the comparison."}, status_code=500)
 
 
 @app.exception_handler(storage.Conflict)
 async def conflict(request: Request, exc: storage.Conflict):
     return JSONResponse({"error": str(exc), "current": exc.current}, status_code=409)
+
+
+@app.exception_handler(backup.BackupError)
+async def backup_error(request: Request, exc: backup.BackupError):
+    return JSONResponse({"error": str(exc)}, status_code=409 if isinstance(exc, backup.Busy) else 500)
 
 
 @app.exception_handler(HTTPException)
@@ -281,7 +288,7 @@ def list_comparisons(archived: bool = False):
                           "updated_at": comp["updated_at"], "quotes": len(comp["quotes"]), "files": len(comp["files"]),
                           "lines": [], "carriers": [], "review": 0, "picked": 0, "total": None,
                           "total_estimated": False, "expires": None, "processing": 0, "failed": 0, "progress": None})
-    return {"comparisons": cards, "archived": len(shelf)}
+    return {"comparisons": cards, "archived": len(shelf), "backup_error": backup.last_error()}
 
 
 @app.post("/api/board/move")
@@ -397,6 +404,24 @@ def patch_comparison(cid: str, body: ComparisonPatch):
 def delete_comparison(cid: str):
     storage.delete(cid)
     return {"ok": True}
+
+
+# ---------------------------------------------------------------- backups
+
+@app.get("/api/backups")
+def list_backups():
+    return backup.list_backups()
+
+
+@app.post("/api/backups")
+def back_up_now():
+    made = backup.run("by hand")
+    return {"made": made, **backup.list_backups()}
+
+
+@app.post("/api/backups/{bid}/restore")
+def restore_backup(bid: str):
+    return backup.restore(bid)
 
 
 # ---------------------------------------------------------------- files and jobs

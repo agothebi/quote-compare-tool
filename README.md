@@ -132,6 +132,25 @@ The full side-by-side comparison is attached.
 ```
 
 
+## Backups
+
+While the app is open, it backs up your clients by itself: when it starts, and every hour that
+something changed. The backups go to the `Quote Compare Backups` folder in your Documents folder,
+outside the app's folder, so they're safe even if the app's folder is deleted. Each backup only
+adds what changed, so the folder stays small. It keeps every backup from today, one a day for two
+weeks, and one a month for a year.
+
+**If your clients disappear** (the folder was deleted, or you downloaded the app again): start the
+app. The board says there's a backup and offers **Restore it**. Click it and everything comes back.
+
+**To go back to an earlier backup:** click **Backups** at the bottom of the board, pick one and
+click **Restore**. Your clients as they are now get backed up first, so you can undo it.
+
+To keep the backups somewhere else, for example a OneDrive or Dropbox folder, add a line like
+`QUOTE_COMPARE_BACKUP_DIR=C:\Users\you\OneDrive\Quote Compare Backups` to `.env` and start the app again.
+Don't edit or rename the files inside the backup folder.
+
+
 ## If something goes wrong
 
 - **The page does not open:** wait a few seconds and reload it, or go to http://127.0.0.1:8000.

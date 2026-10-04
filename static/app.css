@@ -118,6 +118,12 @@ body.panel-wide .app{padding-right:716px}
 .empty-col{border:1.5px dashed #cbc2b2;border-radius:12px;padding:16px;text-align:center;color:var(--faint);font-size:12.5px}
 .phead .acts .linkbtn{text-decoration:none;white-space:nowrap}
 .phead .acts .linkbtn:hover{text-decoration:underline}
+/* backups: the offer on an empty board, the link under it, the list in the dialog */
+.offer{display:flex;justify-content:space-between;align-items:center;gap:16px;background:var(--act-soft);border:1px solid #c9dbef;border-radius:14px;padding:12px 14px;margin-bottom:16px}
+.offer .acts{display:flex;gap:8px;flex:none}
+.boardfoot{display:flex;justify-content:flex-end;align-items:center;gap:12px;margin-top:14px;font-size:12.5px}
+.bklist{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:6px}
+.bklist li{display:flex;justify-content:space-between;align-items:center;gap:12px;background:var(--sunk);border-radius:10px;padding:8px 10px 8px 12px;font-size:13.5px}
 /* archived clients: a plain list, not columns */
 .shelf{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:8px}
 .shelf-row{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:12px 14px;display:flex;justify-content:space-between;align-items:center;gap:16px}

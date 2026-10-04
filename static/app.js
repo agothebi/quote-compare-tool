@@ -36,6 +36,8 @@ const S = {
   archivedCount: 0,     // the board links to the archived clients
   shelf: null,          // archived cards from GET /api/comparisons?archived=1
   shelfFilter: '',
+  backupError: null,    // why the last backup failed (the board says so)
+  backupOffer: null,    // the newest backup, offered when there are no clients at all
   comp: null,           // the open comparison (the server's view)
   lineBy: {},           // comparison id -> selected line
   rowMode: 'all',       // 'all' | 'diff'
@@ -114,6 +116,15 @@ function fmtDate(iso, year = true) {
   const d = new Date(iso);
   if (isNaN(d)) return '';
   return d.toLocaleDateString('en-US', year ? { month: 'short', day: 'numeric', year: 'numeric' } : { month: 'short', day: 'numeric' });
+}
+
+// "Oct 3, 4:12 PM" (with the year when it isn't this year)
+function fmtWhen(iso) {
+  const d = new Date(iso);
+  if (isNaN(d)) return '';
+  const opts = { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' };
+  if (d.getFullYear() !== new Date().getFullYear()) opts.year = 'numeric';
+  return d.toLocaleString('en-US', opts);
 }
 
 function rel(iso) {
@@ -208,6 +219,7 @@ async function showBoard(seq) {
     $('#app').innerHTML = `<div class="empty"><h2>The clients could not be loaded</h2><p>${esc(e.message)}</p><button class="btn" data-act="reload">Try again</button></div>`;
     return;
   }
+  await checkBackupOffer();
   if (seq !== routeSeq) return;
   renderBoard();
   window.scrollTo(0, 0);
@@ -220,7 +232,13 @@ function scheduleBoardRefresh() {
   if (S.route.name === 'board' && S.board && S.board.some(c => c.processing)) S.boardTimer = setTimeout(refreshBoard, 1500);
 }
 
-function setBoard(r) { S.board = r.comparisons; S.archivedCount = r.archived || 0; }
+function setBoard(r) { S.board = r.comparisons; S.archivedCount = r.archived || 0; S.backupError = r.backup_error || null; }
+
+// No clients at all, but a backup exists (the data folder was deleted, or the app downloaded again): offer it.
+async function checkBackupOffer() {
+  if (S.board.length || S.archivedCount) { S.backupOffer = null; return; }
+  try { S.backupOffer = (await api('GET', '/api/backups')).backups[0] || null; } catch (e) { S.backupOffer = null; }
+}
 
 async function refreshBoard() {
   if (S.route.name === 'archived') { refreshShelf(); return; }
@@ -286,7 +304,10 @@ function renderBoard() {
       <h1>Clients</h1><div class="meta">${plural(open, 'open comparison')}${S.board.length ? ' · drag a card when its status changes' : ''}</div></div>
     <div class="acts">${S.archivedCount ? `<a class="linkbtn" href="#/archived">Archived (${S.archivedCount})</a>` : ''}<input class="inp search" id="search" type="search" placeholder="Find a client or carrier" aria-label="Find a client or carrier" value="${esc(S.filter)}">
       <button class="btn primary" data-act="new">New client</button></div></header>
-    <div class="board">${cols}</div>`;
+    ${S.backupOffer && !S.board.length ? `<div class="offer" role="status"><div><b>No clients here.</b> There's a backup from ${esc(fmtWhen(S.backupOffer.created_at))} with ${plural(S.backupOffer.clients, 'client')}.</div>
+      <div class="acts"><button class="btn sm" data-act="backups">Other backups</button><button class="btn sm primary" data-act="restore" data-id="${esc(S.backupOffer.id)}">Restore it</button></div></div>` : ''}
+    <div class="board">${cols}</div>
+    <div class="boardfoot">${S.backupError ? `<span class="bad-t">${esc(S.backupError)}</span>` : ''}<button class="linkbtn sm" data-act="backups">Backups</button></div>`;
   applyWidths($('#app'));
   if (sel) { const box = $('#search'); box.focus(); box.setSelectionRange(sel[0], sel[1]); }  // a redraw never moves the caret
   else restoreFocus(fk);
@@ -541,6 +562,9 @@ function modalHtml(m) {
       ${m.fresh ? '<div class="mf"><button class="btn quiet" data-act="skip-drop">Skip for now</button></div>' : ''}`;
     case 'progress': return progressHtml(m);
     case 'files': return filesHtml();
+    case 'backups': return backupsHtml(m);
+    case 'restore': return `<div class="mh"><div><h2 id="mt">Restore the backup from ${esc(fmtWhen(m.backup.created_at))}?</h2><div class="s">It has ${plural(m.backup.clients, 'client')}. ${m.hasClients ? 'The clients you have now are backed up first, so you can undo this.' : ''}</div></div>${X_BUTTON}</div>
+      <div class="mf"><button class="btn" data-act="close">Cancel</button><button class="btn primary" data-act="restore-yes" data-id="${esc(m.backup.id)}" data-autofocus>Restore</button></div>`;
     case 'delete': return `<div class="mh"><div><h2 id="mt">Delete ${esc(m.name)}?</h2><div class="s">This removes the quote files, the pages read from them, and your notes. It can't be undone.</div></div>${X_BUTTON}</div>
       <div class="mf"><button class="btn" data-act="close">Cancel</button><button class="btn danger-solid" data-act="delete-yes" data-id="${esc(m.id)}">Delete</button></div>`;
     case 'unchecked': return `<div class="mh"><div><h2 id="mt">${plural(m.n, 'value')} still ${m.n === 1 ? 'needs' : 'need'} a check</h2><div class="s">The PDF prints ${m.n === 1 ? 'it' : 'them'} like every other value, so the client can't tell ${m.n === 1 ? 'it was' : 'they were'} not checked.</div></div>${X_BUTTON}</div>
@@ -576,6 +600,31 @@ async function submitNew() {
     drawModal(true);
     if (S.route.name === 'board') refreshBoard();
   } catch (e) { err.textContent = e.message; err.hidden = false; btn.disabled = false; }
+}
+
+const BACKUP_REASON = { 'before restore': 'before a restore', 'by hand': 'made by hand' };
+function backupsHtml(m) {
+  const list = m.data ? m.data.backups : null;
+  const rows = !list ? '<p class="faint">Loading…</p>'
+    : !list.length ? '<p class="faint">No backups yet. The app makes one when it starts and each hour something changes.</p>'
+      : `<ul class="bklist">${list.map(b => `<li><span><b>${esc(fmtWhen(b.created_at))}</b><span class="muted"> · ${plural(b.clients, 'client')}${BACKUP_REASON[b.reason] ? ` · ${BACKUP_REASON[b.reason]}` : ''}</span></span><button class="btn sm" data-act="restore" data-id="${esc(b.id)}">Restore</button></li>`).join('')}</ul>`;
+  return `<div class="mh"><div><h2 id="mt">Backups</h2><div class="s">Made when the app starts and each hour something changes. Kept: every one from today, one a day for two weeks, one a month for a year.</div></div>${X_BUTTON}</div>
+    <div class="mb">${m.data && m.data.last_error ? `<p class="err">${esc(m.data.last_error)}</p>` : ''}${rows}${m.data ? `<p class="faint small">Saved in ${esc(m.data.dir)}</p>` : ''}</div>
+    <div class="mf"><button class="btn" data-act="backup-now"${m.working ? ' disabled' : ''}>${m.working ? 'Backing up…' : 'Back up now'}</button><button class="btn primary" data-act="close">Done</button></div>`;
+}
+
+async function openBackups() {
+  openModal({ kind: 'backups', data: null });
+  try { const data = await api('GET', '/api/backups'); if (S.modal && S.modal.kind === 'backups') { S.modal.data = data; drawModal(false); } }
+  catch (e) { fail(e); }
+}
+
+async function restoreBackup(id, undoable = true) {
+  const r = await api('POST', `/api/backups/${encodeURIComponent(id)}/restore`);
+  closeModal(true);
+  S.backupOffer = null;
+  toast(`Restored ${plural(r.clients, 'client')}`, undoable && r.undo ? { action: { label: 'Undo', fn: () => restoreBackup(r.undo, false) } } : {});
+  if (S.route.name === 'board') refreshBoard(); else location.hash = '#/';
 }
 
 function openAdd() {
@@ -1554,6 +1603,27 @@ async function onAction(el, e) {
     case 'open': closeMenu(); location.hash = `#/c/${el.dataset.id}`; break;
     case 'move': closeMenu(); await moveCard(el.dataset.id, el.dataset.stage, 0); break;
     case 'archive': closeMenu(); await archiveCard(el.dataset.id); break;
+    case 'backups': await openBackups(); break;
+    case 'restore': {
+      let b = S.backupOffer && S.backupOffer.id === el.dataset.id ? S.backupOffer : null;
+      if (!b && S.modal && S.modal.data) b = S.modal.data.backups.find(x => x.id === el.dataset.id);
+      if (b) openModal({ kind: 'restore', backup: b, hasClients: !!((S.board && S.board.length) || S.archivedCount) });
+      break;
+    }
+    case 'restore-yes':
+      el.disabled = true;
+      try { await restoreBackup(el.dataset.id); } catch (err) { el.disabled = false; fail(err); }
+      break;
+    case 'backup-now': {
+      const m = S.modal;
+      m.working = true; drawModal(false);
+      try {
+        const r = await api('POST', '/api/backups');
+        if (S.modal === m) { m.data = r; m.working = false; drawModal(false); }
+        toast(r.made ? 'Backed up' : 'Nothing changed since the last backup');
+      } catch (err) { m.working = false; if (S.modal === m) drawModal(false); fail(err); }
+      break;
+    }
     case 'unarchive': {
       el.disabled = true;
       try { const v = await unarchive(el.dataset.id); toast(`${v.client.name} is back on the board in ${stageLabel(v.stage)}`); refreshShelf(); }
