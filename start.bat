@@ -5,6 +5,10 @@ setlocal
 cd /d "%~dp0"
 title Quote Compare
 
+rem A .venv that no longer runs (the folder was moved, Python reinstalled) is made again.
+if exist ".venv\Scripts\python.exe" (
+  ".venv\Scripts\python.exe" -c "import sys" >nul 2>&1 || rmdir /s /q .venv
+)
 if not exist ".venv\Scripts\python.exe" (
   echo Setting up Quote Compare, first start only, a few minutes...
   py -3.13 -m venv .venv || goto nopython

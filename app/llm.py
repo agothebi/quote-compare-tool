@@ -22,7 +22,16 @@ from app.config import DATA_DIR, load_env, settings
 
 USAGE_FILE = DATA_DIR / "llm_usage.json"
 # Provider daily quotas reset at midnight Pacific time.
-QUOTA_TZ = ZoneInfo("America/Los_Angeles")
+def _pacific():
+    """Pacific time, where Google's daily quotas reset. Windows has no time zone database of its own
+    (the tzdata package brings one); without it, the computer's own time zone is close enough."""
+    try:
+        return ZoneInfo("America/Los_Angeles")
+    except Exception:
+        return None  # datetime.now(None) = local time
+
+
+QUOTA_TZ = _pacific()
 
 
 class LLMError(RuntimeError):

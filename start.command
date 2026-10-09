@@ -11,6 +11,8 @@ fail() {
   exit 1
 }
 
+# A .venv that no longer runs (the folder was moved, Python reinstalled) is made again.
+if [ -e .venv ] && ! .venv/bin/python -c "import sys" >/dev/null 2>&1; then rm -rf .venv; fi
 if [ ! -x .venv/bin/python ]; then
   command -v brew >/dev/null || fail "Homebrew is needed first. See README.md, step 2."
   echo "Setting up Quote Compare (first start only, a few minutes)..."

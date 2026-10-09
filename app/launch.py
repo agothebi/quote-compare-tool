@@ -18,6 +18,7 @@ import threading
 import time
 import urllib.request
 import webbrowser
+from pathlib import Path
 
 from app.config import ROOT, load_env, settings
 
@@ -80,6 +81,25 @@ def check_tesseract() -> str | None:
            if platform.system() == "Windows" else "Install the tesseract-ocr package")
     return ("Tesseract (the program that reads scanned pages) was not found.\n"
             f"  Quotes that are scans or photos can't be read until it is installed.\n  {how}")
+
+
+def check_location(root: Path | None = None) -> str | None:
+    """The app folder inside OneDrive (or Dropbox, iCloud): the clients' quotes would be uploaded, and
+    syncing holds files the app is saving. Said once at every start until the folder is moved."""
+    import os
+    root = Path(root or ROOT).resolve()
+    synced = [os.environ.get(k) for k in ("OneDrive", "OneDriveConsumer", "OneDriveCommercial")]
+    synced += [str(Path.home() / "Dropbox"), str(Path.home() / "Library" / "Mobile Documents")]
+    for s in filter(None, synced):
+        try:
+            root.relative_to(Path(s).resolve())
+        except (ValueError, OSError):
+            continue
+        return ("This folder is synced to the cloud (OneDrive, Dropbox or iCloud):\n"
+                f"  {root}\n"
+                "  Your clients' quotes would be uploaded there, and syncing can block saves.\n"
+                "  Move the quote-compare-tool folder to your user folder (see the README).")
+    return None
 
 
 def save_key(env: str, key: str, path=None) -> None:
@@ -174,7 +194,7 @@ def main(argv: list[str] | None = None) -> int:
             return 1
         url = f"http://{host}:{port}"
 
-    warnings = [w for w in (check_tesseract(), check_key()) if w]
+    warnings = [w for w in (check_location(), check_tesseract(), check_key()) if w]
     print(LINE)
     print(f"  Quote Compare is starting at {url}")
     print("  Keep this window open while you use it. Close it (or press Ctrl+C) to stop.")
